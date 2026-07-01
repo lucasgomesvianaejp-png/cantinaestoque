@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cantina Estoque</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --primary: #111827;
+      --primary-soft: #f3f4f6;
+      --success: #0f766e;
+      --danger: #b91c1c;
+      --warning: #b45309;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+    }
+
+    aside {
+      background: #111827;
+      color: white;
+      padding: 24px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .brand {
+      margin-bottom: 26px;
+    }
+
+    .brand h1 {
+      font-size: 22px;
+      margin: 0 0 6px;
+      letter-spacing: -0.02em;
+    }
+
+    .brand p {
+      margin: 0;
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.35;
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav button {
+      border: 0;
+      background: transparent;
+      color: #e5e7eb;
+      padding: 12px 14px;
+      border-radius: 12px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 15px;
+      transition: 0.15s;
+    }
+
+    .nav button:hover,
+    .nav button.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    main {
+      padding: 28px;
+      max-width: 1500px;
+      width: 100%;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .topbar h2 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+    }
+
+    .topbar p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .status {
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--danger); }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.cards {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .grid.two {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .metric .value {
+      font-weight: 800;
+      font-size: 26px;
+      letter-spacing: -0.03em;
+    }
+
+    .metric .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-title h3 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .section-title small {
+      color: var(--muted);
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: #374151;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--ink);
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #111827;
+      box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+    }
+
+    textarea { min-height: 120px; resize: vertical; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+
+    .form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .form-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .form-grid .wide { grid-column: span 2; }
+    .form-grid .full { grid-column: 1 / -1; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button.primary, button.secondary, button.danger, button.ghost {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      transition: 0.15s;
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    button.primary:hover { filter: brightness(1.1); }
+
+    button.secondary {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    button.danger {
+      background: #fee2e2;
+      color: var(--danger);
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      color: #4b5563;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: #f9fafb;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    td.num, th.num { text-align: right; }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 620px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--primary-soft);
+      color: #374151;
+      white-space: nowrap;
+    }
+
+    .badge.ok { background: #ccfbf1; color: #0f766e; }
+    .badge.warn { background: #fef3c7; color: #92400e; }
+    .badge.danger { background: #fee2e2; color: #991b1b; }
+
+    .muted { color: var(--muted); }
+    .money { font-weight: 800; }
+    .danger-text { color: var(--danger); }
+    .success-text { color: var(--success); }
+    .warning-text { color: var(--warning); }
+
+    .notice {
+      border: 1px solid #fde68a;
+      background: #fffbeb;
+      color: #92400e;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      background: #111827;
+      color: white;
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+      max-width: 380px;
+      display: none;
+      z-index: 30;
+      line-height: 1.35;
+    }
+
+    .toast.show { display: block; }
+
+    .tabs-inline {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .tabs-inline button {
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #374151;
+      font-weight: 700;
+    }
+
+    .tabs-inline button.active {
+      background: #111827;
+      color: white;
+      border-color: #111827;
+    }
+
+    .empty {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .compact-input { min-width: 120px; }
+    .nowrap { white-space: nowrap; }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; }
+      aside { position: relative; height: auto; }
+      .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid.cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid.two { grid-template-columns: 1fr; }
+      .form-grid, .form-grid.three, .form-grid.two { grid-template-columns: 1fr 1fr; }
+      .form-grid .wide, .form-grid .full { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 680px) {
+      main { padding: 18px; }
+      .topbar { flex-direction: column; }
+      .grid.cards { grid-template-columns: 1fr; }
+      .form-grid, .form-grid.three, .form-grid.two { grid-template-columns: 1fr; }
+      .nav { grid-template-columns: 1fr; }
+      .metric .value { font-size: 22px; }
+      th, td { padding: 9px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <h1>Cantina Estoque</h1>
+        <p>Controle por nota, estoque contado, lucro distribuído e saques por conta.</p>
+      </div>
+      <div class="nav">
+        <button class="active" data-view="dashboard">Dashboard</button>
+        <button data-view="produtos">Produtos</button>
+        <button data-view="importar">Importar Nota</button>
+        <button data-view="estoque">Atualizar Estoque</button>
+        <button data-view="distribuicao">Distribuição</button>
+        <button data-view="historico">Histórico</button>
+        <button data-view="configuracoes">Configurações</button>
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle">Resumo financeiro e operacional da cantina.</p>
+        </div>
+        <div id="connectionStatus" class="status">Conectando ao Firebase...</div>
+      </div>
+
+      <section id="dashboard" class="view active">
+        <div class="grid cards" style="margin-bottom: 16px;">
+          <div class="card metric">
+            <div class="label">Lucro gerado</div>
+            <div class="value" id="dashLucroGerado">R$ 0,00</div>
+            <div class="hint">Soma das baixas de estoque.</div>
+          </div>
+          <div class="card metric">
+            <div class="label">Total sacado/pago</div>
+            <div class="value" id="dashSacado">R$ 0,00</div>
+            <div class="hint">Saques por conta de distribuição.</div>
+          </div>
+          <div class="card metric">
+            <div class="label">Saldo disponível</div>
+            <div class="value" id="dashDisponivel">R$ 0,00</div>
+            <div class="hint">Lucro distribuído ainda não sacado.</div>
+          </div>
+          <div class="card metric">
+            <div class="label">Valor em estoque</div>
+            <div class="value" id="dashEstoqueValor">R$ 0,00</div>
+            <div class="hint">Custo dos produtos ainda em estoque.</div>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="card">
+            <div class="section-title">
+              <h3>Saldos por conta</h3>
+              <small>Créditos - saques</small>
+            </div>
+            <div id="dashSaldosContas" class="table-wrap"></div>
+          </div>
+          <div class="card">
+            <div class="section-title">
+              <h3>Alertas de estoque</h3>
+              <small>Produtos com pouco saldo</small>
+            </div>
+            <div id="dashAlertas" class="table-wrap"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="produtos" class="view">
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="section-title">
+            <h3>Cadastrar produto</h3>
+            <small>Produto principal do sistema</small>
+          </div>
+          <form id="produtoForm" class="form-grid">
+            <div class="wide">
+              <label>Nome do produto</label>
+              <input id="produtoNome" placeholder="Ex.: Babalu" required />
+            </div>
+            <div>
+              <label>Categoria</label>
+              <input id="produtoCategoria" placeholder="Doce, bebida..." />
+            </div>
+            <div>
+              <label>Preço de venda padrão</label>
+              <input id="produtoPreco" inputmode="decimal" placeholder="0,50" required />
+            </div>
+            <div>
+              <label>Estoque mínimo</label>
+              <input id="produtoEstoqueMinimo" inputmode="numeric" placeholder="0" />
+            </div>
+            <div class="actions">
+              <button class="primary" type="submit">Salvar produto</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h3>Produtos cadastrados</h3>
+            <small id="produtosCount">0 produtos</small>
+          </div>
+          <div id="produtosTabela" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="importar" class="view">
+        <div class="grid two" style="margin-bottom: 16px;">
+          <div class="card">
+            <div class="section-title">
+              <h3>Importar arquivo</h3>
+              <small>XML de NF-e ou JSON</small>
+            </div>
+            <div class="notice" style="margin-bottom: 14px;">
+              A nota não entra direto no estoque. Primeiro ela será pré-carregada para conferência, associação de produtos e ajuste de preço de venda.
+            </div>
+            <label>Arquivo XML ou JSON</label>
+            <input id="notaArquivo" type="file" accept=".xml,.json,application/xml,text/xml,application/json" />
+            <div class="actions" style="margin-top: 12px;">
+              <button id="btnLerArquivo" class="primary" type="button">Pré-carregar arquivo</button>
+              <button id="btnLimparImportacao" class="secondary" type="button">Limpar</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-title">
+              <h3>Colar JSON</h3>
+              <small>Alternativa manual</small>
+            </div>
+            <label>JSON da nota</label>
+            <textarea id="notaJsonTexto" placeholder='Ex.: { "numeroNota": "123", "fornecedor": "Atacadão", "data": "2026-07-01", "itens": [...] }'></textarea>
+            <div class="actions" style="margin-top: 12px;">
+              <button id="btnLerJson" class="primary" type="button">Pré-carregar JSON</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="notaPreviewCard" class="card" style="display:none;">
+          <div class="section-title">
+            <h3>Conferência da nota</h3>
+            <small>Revise antes de lançar no estoque</small>
+          </div>
+          <div class="form-grid four" style="margin-bottom: 16px;">
+            <div>
+              <label>Data</label>
+              <input id="previewData" type="date" />
+            </div>
+            <div>
+              <label>Fornecedor</label>
+              <input id="previewFornecedor" />
+            </div>
+            <div>
+              <label>Número da nota</label>
+              <input id="previewNumero" />
+            </div>
+            <div>
+              <label>Valor total</label>
+              <input id="previewValorTotal" inputmode="decimal" />
+            </div>
+          </div>
+          <div id="notaItensPreview" class="table-wrap"></div>
+          <div class="actions" style="margin-top: 14px;">
+            <button id="btnConfirmarNota" class="primary" type="button">Confirmar entrada no estoque</button>
+            <button id="btnCancelarNota" class="secondary" type="button">Cancelar</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="estoque" class="view">
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="section-title">
+            <h3>Atualizar estoque contado</h3>
+            <small>A diferença menor vira venda presumida</small>
+          </div>
+          <div class="notice" style="margin-bottom: 14px;">
+            Preencha apenas os produtos que foram contados. Se o novo estoque for menor que o sistema, o sistema calcula venda, custo, lucro e distribui automaticamente. Se for maior, registra ajuste positivo sem lucro.
+          </div>
+          <div class="form-grid three" style="margin-bottom: 14px;">
+            <div>
+              <label>Data da contagem</label>
+              <input id="contagemData" type="date" />
+            </div>
+            <div class="wide">
+              <label>Observação</label>
+              <input id="contagemObs" placeholder="Ex.: contagem do recreio / fechamento da semana" />
+            </div>
+          </div>
+          <div id="estoqueTabela" class="table-wrap"></div>
+          <div class="actions" style="margin-top: 14px;">
+            <button id="btnSalvarContagem" class="primary" type="button">Salvar atualização de estoque</button>
+            <button id="btnZerarInputsEstoque" class="secondary" type="button">Limpar contagem</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="distribuicao" class="view">
+        <div class="grid two" style="margin-bottom: 16px;">
+          <div class="card">
+            <div class="section-title">
+              <h3>Saldos individuais</h3>
+              <small>Conta corrente do lucro</small>
+            </div>
+            <div id="distribuicaoSaldos" class="table-wrap"></div>
+          </div>
+
+          <div class="card">
+            <div class="section-title">
+              <h3>Registrar saque / pagamento</h3>
+              <small>Baixa de uma conta específica</small>
+            </div>
+            <form id="saqueForm" class="form-grid two">
+              <div>
+                <label>Conta</label>
+                <select id="saqueConta" required></select>
+              </div>
+              <div>
+                <label>Saldo disponível</label>
+                <input id="saqueSaldo" disabled />
+              </div>
+              <div>
+                <label>Data</label>
+                <input id="saqueData" type="date" required />
+              </div>
+              <div>
+                <label>Valor do saque/pagamento</label>
+                <input id="saqueValor" inputmode="decimal" placeholder="0,00" required />
+              </div>
+              <div class="full">
+                <label>Observação</label>
+                <input id="saqueObs" placeholder="Ex.: Pix acumulado para a escola" />
+              </div>
+              <div class="actions full">
+                <button class="primary" type="submit">Registrar saque</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h3>Extrato recente da distribuição</h3>
+            <small>Créditos e saques</small>
+          </div>
+          <div id="extratoDistribuicao" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="historico" class="view">
+        <div class="grid two">
+          <div class="card">
+            <div class="section-title">
+              <h3>Notas importadas</h3>
+              <small>Entradas de estoque</small>
+            </div>
+            <div id="historicoNotas" class="table-wrap"></div>
+          </div>
+          <div class="card">
+            <div class="section-title">
+              <h3>Atualizações de estoque</h3>
+              <small>Vendas presumidas e ajustes</small>
+            </div>
+            <div id="historicoContagens" class="table-wrap"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="configuracoes" class="view">
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="section-title">
+            <h3>Contas de distribuição</h3>
+            <small>Percentuais usados nos próximos lucros</small>
+          </div>
+          <div class="notice" style="margin-bottom: 14px;">
+            Alterar percentuais aqui não recalcula o passado. Cada baixa de estoque salva a distribuição usada naquele momento.
+          </div>
+          <form id="contaForm" class="form-grid">
+            <div class="wide">
+              <label>Nome da conta</label>
+              <input id="contaNome" placeholder="Ex.: Lucas, Escola, Giro" required />
+            </div>
+            <div>
+              <label>Percentual</label>
+              <input id="contaPercentual" inputmode="decimal" placeholder="10" required />
+            </div>
+            <div>
+              <label>Tipo</label>
+              <select id="contaTipo">
+                <option value="pessoa">Pessoa</option>
+                <option value="instituicao">Instituição</option>
+                <option value="reinvestimento">Giro / reinvestimento</option>
+              </select>
+            </div>
+            <div class="actions">
+              <button class="primary" type="submit">Adicionar conta</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h3>Regras atuais</h3>
+            <small id="percentualTotalLabel">Total: 0%</small>
+          </div>
+          <div id="contasTabela" class="table-wrap"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      getDoc,
+      doc,
+      setDoc,
+      updateDoc,
+      writeBatch,
+      query,
+      orderBy,
+      serverTimestamp,
+      increment,
+      limit
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBeoULYCaKA1m48cNlXnq-V1pljbvh5nU0",
+      authDomain: "cantinaestoque-4d6bc.firebaseapp.com",
+      projectId: "cantinaestoque-4d6bc",
+      storageBucket: "cantinaestoque-4d6bc.firebasestorage.app",
+      messagingSenderId: "546112070226",
+      appId: "1:546112070226:web:686e15dc8ee1180846b58b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const state = {
+      produtos: [],
+      lotes: [],
+      contas: [],
+      movimentos: [],
+      notas: [],
+      contagens: [],
+      aliases: new Map(),
+      previewNota: null
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    const titles = {
+      dashboard: ["Dashboard", "Resumo financeiro e operacional da cantina."],
+      produtos: ["Produtos", "Cadastro dos produtos principais e visão de estoque."],
+      importar: ["Importar Nota", "Pré-carregue XML ou JSON, confira os itens e confirme a entrada."],
+      estoque: ["Atualizar Estoque", "Informe o estoque contado. A baixa gera lucro automaticamente."],
+      distribuicao: ["Distribuição", "Saldos individuais, saques e extrato do lucro."],
+      historico: ["Histórico", "Notas importadas e atualizações de estoque."],
+      configuracoes: ["Configurações", "Contas e percentuais usados na distribuição do lucro."]
+    };
+
+    const defaultContas = [
+      { nome: "Lucas", percentual: 65, tipo: "pessoa", ativo: true, ordem: 1 },
+      { nome: "Giro / Caixa", percentual: 10, tipo: "reinvestimento", ativo: true, ordem: 2 },
+      { nome: "Escola", percentual: 10, tipo: "instituicao", ativo: true, ordem: 3 },
+      { nome: "Juan", percentual: 7.5, tipo: "pessoa", ativo: true, ordem: 4 },
+      { nome: "Dona Francisca", percentual: 7.5, tipo: "pessoa", ativo: true, ordem: 5 }
+    ];
+
+    function today() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function toNumber(value) {
+      if (value === null || value === undefined || value === "") return 0;
+      if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+      const cleaned = String(value)
+        .trim()
+        .replace(/R\$/g, "")
+        .replace(/\s/g, "")
+        .replace(/\./g, "")
+        .replace(/,/g, ".");
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function brl(value) {
+      return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+
+    function pct(value) {
+      return `${Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+    }
+
+    function normalizeText(text) {
+      return String(text || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, " ")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, " ");
+    }
+
+    function docSafeId(text) {
+      return normalizeText(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 140) || `id-${Date.now()}`;
+    }
+
+    function showToast(message) {
+      const toast = $("toast");
+      toast.textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3600);
+    }
+
+    function setStatus(message, type = "") {
+      const el = $("connectionStatus");
+      el.textContent = message;
+      el.className = `status ${type}`.trim();
+    }
+
+    function formatDate(date) {
+      if (!date) return "-";
+      const str = String(date).slice(0, 10);
+      const [y, m, d] = str.split("-");
+      if (!y || !m || !d) return str;
+      return `${d}/${m}/${y}`;
+    }
+
+    function productById(id) {
+      return state.produtos.find(p => p.id === id);
+    }
+
+    function accountById(id) {
+      return state.contas.find(c => c.id === id);
+    }
+
+    function getStockByProductId(produtoId) {
+      return state.lotes
+        .filter(l => l.produtoId === produtoId && Number(l.quantidadeAtual || 0) > 0)
+        .reduce((sum, l) => sum + Number(l.quantidadeAtual || 0), 0);
+    }
+
+    function getStockValueByProductId(produtoId) {
+      return state.lotes
+        .filter(l => l.produtoId === produtoId && Number(l.quantidadeAtual || 0) > 0)
+        .reduce((sum, l) => sum + Number(l.quantidadeAtual || 0) * Number(l.custoUnitario || 0), 0);
+    }
+
+    function getAverageCostByProductId(produtoId) {
+      const qty = getStockByProductId(produtoId);
+      if (qty <= 0) return 0;
+      return getStockValueByProductId(produtoId) / qty;
+    }
+
+    function getBalances() {
+      const balances = new Map();
+      state.contas.forEach(c => balances.set(c.id, { conta: c, creditos: 0, debitos: 0, saldo: 0 }));
+      state.movimentos.forEach(m => {
+        const contaId = m.contaId;
+        if (!balances.has(contaId)) {
+          balances.set(contaId, { conta: { id: contaId, nome: m.nomeConta || "Conta removida", percentual: 0 }, creditos: 0, debitos: 0, saldo: 0 });
+        }
+        const item = balances.get(contaId);
+        if (m.tipo === "credito") item.creditos += Number(m.valor || 0);
+        if (m.tipo === "debito") item.debitos += Number(m.valor || 0);
+        item.saldo = item.creditos - item.debitos;
+      });
+      return Array.from(balances.values()).sort((a, b) => (a.conta.ordem || 999) - (b.conta.ordem || 999));
+    }
+
+    function htmlEscape(text) {
+      return String(text ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function productOptions(selectedId = "") {
+      const sorted = [...state.produtos].sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+      return `<option value="">Selecione...</option>` + sorted.map(p => `<option value="${p.id}" ${p.id === selectedId ? "selected" : ""}>${htmlEscape(p.nome)}</option>`).join("");
+    }
+
+    function accountOptions(selectedId = "") {
+      return state.contas
+        .filter(c => c.ativo !== false)
+        .sort((a, b) => (a.ordem || 999) - (b.ordem || 999))
+        .map(c => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${htmlEscape(c.nome)}</option>`)
+        .join("");
+    }
+
+    async function loadCollection(name, orderField = null) {
+      const ref = collection(db, name);
+      const snap = orderField ? await getDocs(query(ref, orderBy(orderField, "desc"))) : await getDocs(ref);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    async function ensureDefaultAccounts() {
+      const snap = await getDocs(collection(db, "contasDistribuicao"));
+      if (!snap.empty) return;
+      const batch = writeBatch(db);
+      defaultContas.forEach(conta => {
+        const id = docSafeId(conta.nome);
+        batch.set(doc(db, "contasDistribuicao", id), {
+          ...conta,
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+      });
+      await batch.commit();
+    }
+
+    async function refreshData() {
+      try {
+        setStatus("Sincronizando...", "");
+        await ensureDefaultAccounts();
+        const [produtos, lotes, contas, movimentos, notas, contagens, aliasesDocs] = await Promise.all([
+          loadCollection("produtos"),
+          loadCollection("lotesEstoque"),
+          loadCollection("contasDistribuicao"),
+          loadCollection("movimentosDistribuicao", "data"),
+          loadCollection("notasCompra", "data"),
+          loadCollection("contagensEstoque", "data"),
+          loadCollection("aliasesProdutos")
+        ]);
+
+        state.produtos = produtos.sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+        state.lotes = lotes;
+        state.contas = contas.sort((a, b) => (a.ordem || 999) - (b.ordem || 999));
+        state.movimentos = movimentos;
+        state.notas = notas;
+        state.contagens = contagens;
+        state.aliases = new Map();
+        aliasesDocs.forEach(a => state.aliases.set(a.descricaoNormalizada, a));
+
+        renderAll();
+        setStatus("Conectado ao Firebase", "ok");
+      } catch (error) {
+        console.error(error);
+        setStatus("Erro ao conectar/sincronizar", "err");
+        showToast(`Erro: ${error.message}`);
+      }
+    }
+
+    function renderAll() {
+      renderDashboard();
+      renderProdutos();
+      renderEstoque();
+      renderDistribuicao();
+      renderHistorico();
+      renderConfiguracoes();
+      updateSaqueSelect();
+      if (state.previewNota) renderNotaPreview();
+    }
+
+    function renderDashboard() {
+      const totalCreditos = state.movimentos.filter(m => m.tipo === "credito").reduce((s, m) => s + Number(m.valor || 0), 0);
+      const totalDebitos = state.movimentos.filter(m => m.tipo === "debito").reduce((s, m) => s + Number(m.valor || 0), 0);
+      const estoqueValor = state.lotes.reduce((s, l) => s + Number(l.quantidadeAtual || 0) * Number(l.custoUnitario || 0), 0);
+
+      $("dashLucroGerado").textContent = brl(totalCreditos);
+      $("dashSacado").textContent = brl(totalDebitos);
+      $("dashDisponivel").textContent = brl(totalCreditos - totalDebitos);
+      $("dashEstoqueValor").textContent = brl(estoqueValor);
+
+      const balances = getBalances();
+      $("dashSaldosContas").innerHTML = renderTable(
+        ["Conta", "Gerado", "Sacado", "Disponível"],
+        balances.map(b => [
+          htmlEscape(b.conta.nome),
+          brl(b.creditos),
+          brl(b.debitos),
+          `<strong>${brl(b.saldo)}</strong>`
+        ]),
+        [false, true, true, true]
+      );
+
+      const alertas = state.produtos
+        .map(p => ({ ...p, estoque: getStockByProductId(p.id) }))
+        .filter(p => Number(p.estoqueMinimo || 0) > 0 && p.estoque <= Number(p.estoqueMinimo || 0))
+        .sort((a, b) => a.estoque - b.estoque)
+        .slice(0, 15);
+
+      $("dashAlertas").innerHTML = alertas.length ? renderTable(
+        ["Produto", "Estoque", "Mínimo", "Status"],
+        alertas.map(p => [
+          htmlEscape(p.nome),
+          Number(p.estoque || 0).toLocaleString("pt-BR"),
+          Number(p.estoqueMinimo || 0).toLocaleString("pt-BR"),
+          `<span class="badge warn">Estoque baixo</span>`
+        ]),
+        [false, true, true, false]
+      ) : `<div class="empty">Nenhum alerta de estoque mínimo.</div>`;
+    }
+
+    function renderProdutos() {
+      $("produtosCount").textContent = `${state.produtos.length} produtos`;
+      const rows = state.produtos.map(p => {
+        const estoque = getStockByProductId(p.id);
+        const valorEstoque = getStockValueByProductId(p.id);
+        const custoMedio = getAverageCostByProductId(p.id);
+        const lucroMedio = Number(p.precoVendaPadrao || 0) - custoMedio;
+        return [
+          htmlEscape(p.nome),
+          htmlEscape(p.categoria || "-"),
+          brl(p.precoVendaPadrao || 0),
+          Number(estoque).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+          brl(custoMedio),
+          brl(lucroMedio),
+          brl(valorEstoque),
+          Number(p.estoqueMinimo || 0).toLocaleString("pt-BR")
+        ];
+      });
+      $("produtosTabela").innerHTML = rows.length ? renderTable(
+        ["Produto", "Categoria", "Venda", "Estoque", "Custo médio", "Lucro médio", "Valor estoque", "Mínimo"],
+        rows,
+        [false, false, true, true, true, true, true, true]
+      ) : `<div class="empty">Nenhum produto cadastrado ainda.</div>`;
+    }
+
+    function renderEstoque() {
+      if (!state.produtos.length) {
+        $("estoqueTabela").innerHTML = `<div class="empty">Cadastre ou importe produtos antes de atualizar estoque.</div>`;
+        return;
+      }
+      const rows = state.produtos.map(p => {
+        const estoque = getStockByProductId(p.id);
+        const custoMedio = getAverageCostByProductId(p.id);
+        return `
+          <tr>
+            <td><strong>${htmlEscape(p.nome)}</strong><br><span class="muted">${htmlEscape(p.categoria || "Sem categoria")}</span></td>
+            <td class="num">${Number(estoque).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</td>
+            <td class="num">${brl(p.precoVendaPadrao || 0)}</td>
+            <td class="num">${brl(custoMedio)}</td>
+            <td><input class="compact-input estoque-input" data-produto-id="${p.id}" inputmode="decimal" placeholder="Novo estoque" /></td>
+          </tr>`;
+      }).join("");
+
+      $("estoqueTabela").innerHTML = `
+        <table>
+          <thead><tr><th>Produto</th><th class="num">Estoque sistema</th><th class="num">Venda</th><th class="num">Custo médio</th><th>Novo estoque contado</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function renderDistribuicao() {
+      const balances = getBalances();
+      $("distribuicaoSaldos").innerHTML = renderTable(
+        ["Conta", "% atual", "Gerado", "Sacado/Pago", "Disponível"],
+        balances.map(b => [
+          htmlEscape(b.conta.nome),
+          pct(b.conta.percentual),
+          brl(b.creditos),
+          brl(b.debitos),
+          `<strong>${brl(b.saldo)}</strong>`
+        ]),
+        [false, true, true, true, true]
+      );
+
+      const recent = [...state.movimentos]
+        .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")))
+        .slice(0, 40);
+      $("extratoDistribuicao").innerHTML = recent.length ? renderTable(
+        ["Data", "Conta", "Tipo", "Valor", "Origem/Obs."],
+        recent.map(m => [
+          formatDate(m.data),
+          htmlEscape(m.nomeConta || accountById(m.contaId)?.nome || "-"),
+          m.tipo === "credito" ? `<span class="badge ok">Crédito</span>` : `<span class="badge danger">Saque</span>`,
+          `<strong>${m.tipo === "credito" ? "+" : "-"} ${brl(m.valor || 0)}</strong>`,
+          htmlEscape(m.observacao || m.origem || "-")
+        ]),
+        [false, false, false, true, false]
+      ) : `<div class="empty">Nenhum movimento de distribuição ainda.</div>`;
+    }
+
+    function renderHistorico() {
+      $("historicoNotas").innerHTML = state.notas.length ? renderTable(
+        ["Data", "Fornecedor", "Nota", "Valor", "Itens"],
+        state.notas.slice(0, 80).map(n => [
+          formatDate(n.data),
+          htmlEscape(n.fornecedor || "-"),
+          htmlEscape(n.numeroNota || "-"),
+          brl(n.valorTotal || 0),
+          Number(n.totalItens || 0).toLocaleString("pt-BR")
+        ]),
+        [false, false, false, true, true]
+      ) : `<div class="empty">Nenhuma nota importada ainda.</div>`;
+
+      $("historicoContagens").innerHTML = state.contagens.length ? renderTable(
+        ["Data", "Faturamento", "Custo", "Lucro", "Obs."],
+        state.contagens.slice(0, 80).map(c => [
+          formatDate(c.data),
+          brl(c.faturamentoTotal || 0),
+          brl(c.custoTotal || 0),
+          `<strong>${brl(c.lucroTotal || 0)}</strong>`,
+          htmlEscape(c.observacao || "-")
+        ]),
+        [false, true, true, true, false]
+      ) : `<div class="empty">Nenhuma atualização de estoque ainda.</div>`;
+    }
+
+    function renderConfiguracoes() {
+      const total = state.contas.filter(c => c.ativo !== false).reduce((s, c) => s + Number(c.percentual || 0), 0);
+      $("percentualTotalLabel").textContent = `Total: ${pct(total)}`;
+      $("percentualTotalLabel").className = Math.abs(total - 100) < 0.001 ? "success-text" : "danger-text";
+
+      $("contasTabela").innerHTML = state.contas.length ? `
+        <table>
+          <thead><tr><th>Conta</th><th>Tipo</th><th class="num">Percentual</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${state.contas.map(c => `
+              <tr>
+                <td><strong>${htmlEscape(c.nome)}</strong></td>
+                <td>${htmlEscape(c.tipo || "-")}</td>
+                <td class="num"><input class="conta-percentual-input" data-conta-id="${c.id}" value="${String(c.percentual || 0).replace('.', ',')}" inputmode="decimal" /></td>
+                <td>${c.ativo === false ? `<span class="badge danger">Inativa</span>` : `<span class="badge ok">Ativa</span>`}</td>
+                <td class="nowrap">
+                  <button class="secondary salvar-percentual" data-conta-id="${c.id}" type="button">Salvar %</button>
+                  <button class="ghost alternar-conta" data-conta-id="${c.id}" type="button">${c.ativo === false ? "Ativar" : "Inativar"}</button>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>` : `<div class="empty">Nenhuma conta cadastrada.</div>`;
+    }
+
+    function renderTable(headers, rows, numericFlags = []) {
+      if (!rows.length) return `<div class="empty">Sem dados para mostrar.</div>`;
+      return `
+        <table>
+          <thead><tr>${headers.map((h, i) => `<th class="${numericFlags[i] ? "num" : ""}">${h}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${rows.map(row => `<tr>${row.map((cell, i) => `<td class="${numericFlags[i] ? "num" : ""}">${cell}</td>`).join("")}</tr>`).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    function updateSaqueSelect() {
+      $("saqueConta").innerHTML = accountOptions($("saqueConta").value);
+      updateSaqueSaldo();
+    }
+
+    function updateSaqueSaldo() {
+      const contaId = $("saqueConta").value;
+      const balance = getBalances().find(b => b.conta.id === contaId);
+      $("saqueSaldo").value = brl(balance?.saldo || 0);
+    }
+
+    function parseXmlNfe(text) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(text, "application/xml");
+      const parserError = xml.querySelector("parsererror");
+      if (parserError) throw new Error("XML inválido ou mal formatado.");
+
+      const getText = (parent, selector) => parent?.querySelector(selector)?.textContent?.trim() || "";
+      const infNFe = xml.querySelector("infNFe");
+      const ide = xml.querySelector("ide");
+      const emit = xml.querySelector("emit");
+      const total = xml.querySelector("ICMSTot");
+
+      const numeroNota = getText(ide, "nNF");
+      const dataRaw = getText(ide, "dhEmi") || getText(ide, "dEmi") || today();
+      const data = dataRaw.slice(0, 10);
+      const fornecedor = getText(emit, "xNome") || getText(emit, "xFant") || "Fornecedor não informado";
+      const valorTotal = toNumber(getText(total, "vNF"));
+
+      const itens = Array.from(xml.querySelectorAll("det")).map(det => {
+        const prod = det.querySelector("prod");
+        const descricao = getText(prod, "xProd");
+        const quantidade = toNumber(getText(prod, "qCom") || getText(prod, "qTrib"));
+        const custoTotal = toNumber(getText(prod, "vProd"));
+        const custoUnitario = quantidade > 0 ? custoTotal / quantidade : toNumber(getText(prod, "vUnCom"));
+        const codigo = getText(prod, "cProd");
+        return {
+          codigo,
+          descricaoOriginal: descricao,
+          quantidade,
+          custoTotal,
+          custoUnitario,
+          precoVenda: 0
+        };
+      }).filter(i => i.descricaoOriginal && i.quantidade > 0);
+
+      if (!itens.length) throw new Error("Não encontrei itens de produto nesse XML.");
+      return { numeroNota, fornecedor, data, valorTotal, itens, origem: "xml" };
+    }
+
+    function parseJsonNota(text) {
+      const raw = JSON.parse(text);
+      const itensRaw = raw.itens || raw.items || raw.produtos || raw.detalhes || [];
+      if (!Array.isArray(itensRaw) || !itensRaw.length) throw new Error("JSON sem lista de itens. Use a chave itens: [...].");
+      const itens = itensRaw.map(item => {
+        const quantidade = toNumber(item.quantidade ?? item.qtd ?? item.qCom ?? item.unidades);
+        const custoTotal = toNumber(item.custoTotal ?? item.valorTotal ?? item.vProd ?? item.total);
+        const custoUnitario = quantidade > 0 ? (custoTotal / quantidade) : toNumber(item.custoUnitario ?? item.valorUnitario ?? item.vUnCom);
+        return {
+          codigo: item.codigo || item.cProd || "",
+          descricaoOriginal: item.descricaoOriginal || item.descricao || item.nome || item.xProd || "",
+          quantidade,
+          custoTotal: custoTotal || quantidade * custoUnitario,
+          custoUnitario,
+          precoVenda: toNumber(item.precoVenda ?? item.venda ?? item.preco)
+        };
+      }).filter(i => i.descricaoOriginal && i.quantidade > 0);
+
+      if (!itens.length) throw new Error("Não encontrei itens válidos no JSON.");
+      return {
+        numeroNota: raw.numeroNota || raw.nNF || raw.nota || "",
+        fornecedor: raw.fornecedor || raw.emitente || raw.xNome || "Fornecedor não informado",
+        data: String(raw.data || raw.dataCompra || raw.dhEmi || today()).slice(0, 10),
+        valorTotal: toNumber(raw.valorTotal || raw.vNF || itens.reduce((s, i) => s + i.custoTotal, 0)),
+        itens,
+        origem: "json"
+      };
+    }
+
+    function preparePreview(nota) {
+      nota.itens = nota.itens.map((item, index) => {
+        const normalized = normalizeText(item.descricaoOriginal);
+        const alias = state.aliases.get(normalized);
+        const produto = alias ? productById(alias.produtoId) : null;
+        return {
+          ...item,
+          rowId: `row-${index}-${Date.now()}`,
+          descricaoNormalizada: normalized,
+          produtoId: produto?.id || "",
+          produtoNomeNovo: produto ? "" : item.descricaoOriginal,
+          produtoCategoriaNova: "",
+          precoVenda: item.precoVenda || produto?.precoVendaPadrao || 0,
+          status: produto ? "reconhecido" : "pendente"
+        };
+      });
+      state.previewNota = nota;
+      $("notaPreviewCard").style.display = "block";
+      renderNotaPreview();
+      showToast("Nota pré-carregada. Confira os produtos antes de confirmar.");
+    }
+
+    function renderNotaPreview() {
+      const nota = state.previewNota;
+      if (!nota) return;
+      $("previewData").value = nota.data || today();
+      $("previewFornecedor").value = nota.fornecedor || "";
+      $("previewNumero").value = nota.numeroNota || "";
+      $("previewValorTotal").value = String((nota.valorTotal || nota.itens.reduce((s, i) => s + Number(i.custoTotal || 0), 0)).toFixed(2)).replace(".", ",");
+
+      const rows = nota.itens.map((item, idx) => {
+        const produto = productById(item.produtoId);
+        const status = item.produtoId ? `<span class="badge ok">${item.status === "reconhecido" ? "Reconhecido" : "Atribuído"}</span>` : `<span class="badge warn">Pendente</span>`;
+        return `
+          <tr data-row-id="${item.rowId}">
+            <td>
+              <strong>${htmlEscape(item.descricaoOriginal)}</strong><br>
+              <span class="muted">${htmlEscape(item.codigo || "")}</span>
+            </td>
+            <td class="num">${Number(item.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</td>
+            <td class="num">${brl(item.custoTotal || 0)}</td>
+            <td class="num">${brl(item.custoUnitario || 0)}</td>
+            <td>
+              <select class="preview-produto-select" data-index="${idx}">
+                ${productOptions(item.produtoId)}
+                <option value="__novo__" ${!item.produtoId ? "selected" : ""}>+ Criar novo produto</option>
+              </select>
+              <div class="novo-produto-box" style="margin-top:8px; display:${!item.produtoId ? "grid" : "none"}; gap:8px;">
+                <input class="preview-novo-nome" data-index="${idx}" value="${htmlEscape(item.produtoNomeNovo || item.descricaoOriginal)}" placeholder="Nome do novo produto" />
+                <input class="preview-nova-categoria" data-index="${idx}" value="${htmlEscape(item.produtoCategoriaNova || "")}" placeholder="Categoria" />
+              </div>
+            </td>
+            <td><input class="preview-preco-venda" data-index="${idx}" inputmode="decimal" value="${String(item.precoVenda || produto?.precoVendaPadrao || "").replace('.', ',')}" placeholder="0,00" /></td>
+            <td>${status}</td>
+          </tr>`;
+      }).join("");
+
+      $("notaItensPreview").innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Produto na nota</th>
+              <th class="num">Qtd</th>
+              <th class="num">Custo total</th>
+              <th class="num">Custo unit.</th>
+              <th>Produto no sistema</th>
+              <th>Preço venda</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function syncPreviewFromInputs() {
+      const nota = state.previewNota;
+      if (!nota) return;
+      nota.data = $("previewData").value || today();
+      nota.fornecedor = $("previewFornecedor").value || "Fornecedor não informado";
+      nota.numeroNota = $("previewNumero").value || "";
+      nota.valorTotal = toNumber($("previewValorTotal").value);
+
+      document.querySelectorAll(".preview-produto-select").forEach(sel => {
+        const idx = Number(sel.dataset.index);
+        if (sel.value === "__novo__") {
+          nota.itens[idx].produtoId = "";
+          nota.itens[idx].status = "pendente";
+        } else {
+          nota.itens[idx].produtoId = sel.value;
+          nota.itens[idx].status = "atribuido";
+        }
+      });
+      document.querySelectorAll(".preview-novo-nome").forEach(input => {
+        nota.itens[Number(input.dataset.index)].produtoNomeNovo = input.value;
+      });
+      document.querySelectorAll(".preview-nova-categoria").forEach(input => {
+        nota.itens[Number(input.dataset.index)].produtoCategoriaNova = input.value;
+      });
+      document.querySelectorAll(".preview-preco-venda").forEach(input => {
+        nota.itens[Number(input.dataset.index)].precoVenda = toNumber(input.value);
+      });
+    }
+
+    async function confirmNota() {
+      syncPreviewFromInputs();
+      const nota = state.previewNota;
+      if (!nota) return;
+      if (!nota.itens.length) return showToast("A nota não tem itens.");
+
+      const invalid = nota.itens.find(i => (!i.produtoId && !String(i.produtoNomeNovo || "").trim()) || Number(i.precoVenda || 0) <= 0);
+      if (invalid) {
+        showToast("Resolva todos os produtos pendentes e informe preço de venda para todos os itens.");
+        return;
+      }
+
+      const totalPercentual = state.contas.filter(c => c.ativo !== false).reduce((s, c) => s + Number(c.percentual || 0), 0);
+      if (Math.abs(totalPercentual - 100) > 0.001) {
+        showToast("Atenção: os percentuais da distribuição não somam 100%. Ajuste em Configurações antes de gerar lucro.");
+      }
+
+      try {
+        setStatus("Salvando nota...", "");
+        const batch = writeBatch(db);
+        const produtosCriados = new Map();
+        const notaRef = doc(collection(db, "notasCompra"));
+
+        batch.set(notaRef, {
+          data: nota.data || today(),
+          fornecedor: nota.fornecedor || "Fornecedor não informado",
+          numeroNota: nota.numeroNota || "",
+          valorTotal: Number(nota.valorTotal || nota.itens.reduce((s, i) => s + Number(i.custoTotal || 0), 0)),
+          totalItens: nota.itens.length,
+          origem: nota.origem || "manual",
+          status: "confirmada",
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+
+        for (const item of nota.itens) {
+          let produtoId = item.produtoId;
+          let produtoNome = productById(produtoId)?.nome;
+
+          if (!produtoId) {
+            const newName = String(item.produtoNomeNovo || item.descricaoOriginal).trim();
+            const key = normalizeText(newName);
+            if (produtosCriados.has(key)) {
+              produtoId = produtosCriados.get(key).id;
+              produtoNome = produtosCriados.get(key).nome;
+            } else {
+              const produtoRef = doc(collection(db, "produtos"));
+              produtoId = produtoRef.id;
+              produtoNome = newName;
+              produtosCriados.set(key, { id: produtoId, nome: produtoNome });
+              batch.set(produtoRef, {
+                nome: produtoNome,
+                nomeNormalizado: normalizeText(produtoNome),
+                categoria: item.produtoCategoriaNova || "",
+                precoVendaPadrao: Number(item.precoVenda || 0),
+                estoqueMinimo: 0,
+                ativo: true,
+                criadoEm: serverTimestamp(),
+                atualizadoEm: serverTimestamp()
+              });
+            }
+          } else {
+            const produtoRef = doc(db, "produtos", produtoId);
+            batch.update(produtoRef, {
+              precoVendaPadrao: Number(item.precoVenda || 0),
+              atualizadoEm: serverTimestamp()
+            });
+          }
+
+          const itemRef = doc(collection(db, "itensNota"));
+          const loteRef = doc(collection(db, "lotesEstoque"));
+          const aliasId = docSafeId(item.descricaoNormalizada);
+          const aliasRef = doc(db, "aliasesProdutos", aliasId);
+          const custoUnitario = Number(item.custoUnitario || (Number(item.custoTotal || 0) / Number(item.quantidade || 1)) || 0);
+
+          batch.set(itemRef, {
+            notaId: notaRef.id,
+            produtoId,
+            produtoNome,
+            descricaoOriginal: item.descricaoOriginal,
+            descricaoNormalizada: item.descricaoNormalizada,
+            codigo: item.codigo || "",
+            quantidade: Number(item.quantidade || 0),
+            custoTotal: Number(item.custoTotal || 0),
+            custoUnitario,
+            precoVenda: Number(item.precoVenda || 0),
+            data: nota.data || today(),
+            fornecedor: nota.fornecedor || "",
+            criadoEm: serverTimestamp()
+          });
+
+          batch.set(loteRef, {
+            notaId: notaRef.id,
+            itemNotaId: itemRef.id,
+            produtoId,
+            produtoNome,
+            dataCompra: nota.data || today(),
+            quantidadeInicial: Number(item.quantidade || 0),
+            quantidadeAtual: Number(item.quantidade || 0),
+            custoTotal: Number(item.custoTotal || 0),
+            custoUnitario,
+            precoVenda: Number(item.precoVenda || 0),
+            origem: "nota",
+            ativo: true,
+            criadoEm: serverTimestamp(),
+            atualizadoEm: serverTimestamp()
+          });
+
+          batch.set(aliasRef, {
+            descricaoOriginal: item.descricaoOriginal,
+            descricaoNormalizada: item.descricaoNormalizada,
+            produtoId,
+            produtoNome,
+            fornecedor: nota.fornecedor || "",
+            atualizadoEm: serverTimestamp()
+          }, { merge: true });
+        }
+
+        await batch.commit();
+        state.previewNota = null;
+        $("notaPreviewCard").style.display = "none";
+        $("notaArquivo").value = "";
+        $("notaJsonTexto").value = "";
+        await refreshData();
+        showToast("Nota confirmada e estoque atualizado com sucesso.");
+      } catch (error) {
+        console.error(error);
+        setStatus("Erro ao salvar nota", "err");
+        showToast(`Erro ao salvar nota: ${error.message}`);
+      }
+    }
+
+    async function saveStockCount() {
+      const inputs = Array.from(document.querySelectorAll(".estoque-input"));
+      const filled = inputs
+        .filter(input => String(input.value).trim() !== "")
+        .map(input => ({ produtoId: input.dataset.produtoId, novoEstoque: toNumber(input.value) }));
+
+      if (!filled.length) return showToast("Preencha pelo menos um produto contado.");
+
+      const contasAtivas = state.contas.filter(c => c.ativo !== false && Number(c.percentual || 0) > 0);
+      const totalPercentual = contasAtivas.reduce((s, c) => s + Number(c.percentual || 0), 0);
+      if (Math.abs(totalPercentual - 100) > 0.001) {
+        showToast("Os percentuais ativos precisam somar 100% antes de salvar uma contagem que gere lucro.");
+        return;
+      }
+
+      const data = $("contagemData").value || today();
+      const observacao = $("contagemObs").value || "";
+      const itens = [];
+      let faturamentoTotal = 0;
+      let custoTotal = 0;
+      let lucroTotal = 0;
+      let ajustesPositivos = 0;
+
+      const batch = writeBatch(db);
+      const contagemRef = doc(collection(db, "contagensEstoque"));
+
+      try {
+        setStatus("Calculando baixa de estoque...", "");
+        for (const entry of filled) {
+          const produto = productById(entry.produtoId);
+          if (!produto) continue;
+          const estoqueAtual = getStockByProductId(entry.produtoId);
+          const novoEstoque = Number(entry.novoEstoque || 0);
+          const diferenca = estoqueAtual - novoEstoque;
+
+          if (diferenca > 0) {
+            const vendaQtd = diferenca;
+            const precoVenda = Number(produto.precoVendaPadrao || 0);
+            const faturamento = vendaQtd * precoVenda;
+            let restante = vendaQtd;
+            let custo = 0;
+            const lotesProduto = state.lotes
+              .filter(l => l.produtoId === entry.produtoId && Number(l.quantidadeAtual || 0) > 0)
+              .sort((a, b) => String(a.dataCompra || "").localeCompare(String(b.dataCompra || "")) || String(a.id).localeCompare(String(b.id)));
+
+            for (const lote of lotesProduto) {
+              if (restante <= 0) break;
+              const qtdLote = Number(lote.quantidadeAtual || 0);
+              const baixa = Math.min(restante, qtdLote);
+              custo += baixa * Number(lote.custoUnitario || 0);
+              restante -= baixa;
+              batch.update(doc(db, "lotesEstoque", lote.id), {
+                quantidadeAtual: qtdLote - baixa,
+                atualizadoEm: serverTimestamp()
+              });
+            }
+
+            if (restante > 0.0001) throw new Error(`Estoque insuficiente para ${produto.nome}.`);
+            const lucro = faturamento - custo;
+            faturamentoTotal += faturamento;
+            custoTotal += custo;
+            lucroTotal += lucro;
+            itens.push({
+              produtoId: produto.id,
+              produtoNome: produto.nome,
+              tipo: "venda_presumida",
+              estoqueAnterior: estoqueAtual,
+              estoqueContado: novoEstoque,
+              quantidadeVendida: vendaQtd,
+              precoVenda,
+              faturamento,
+              custo,
+              lucro
+            });
+          } else if (diferenca < 0) {
+            const delta = Math.abs(diferenca);
+            ajustesPositivos += delta;
+            const custoMedio = getAverageCostByProductId(entry.produtoId);
+            const loteRef = doc(collection(db, "lotesEstoque"));
+            batch.set(loteRef, {
+              notaId: null,
+              itemNotaId: null,
+              produtoId: produto.id,
+              produtoNome: produto.nome,
+              dataCompra: data,
+              quantidadeInicial: delta,
+              quantidadeAtual: delta,
+              custoTotal: delta * custoMedio,
+              custoUnitario: custoMedio,
+              precoVenda: Number(produto.precoVendaPadrao || 0),
+              origem: "ajuste_positivo_contagem",
+              ativo: true,
+              criadoEm: serverTimestamp(),
+              atualizadoEm: serverTimestamp()
+            });
+            itens.push({
+              produtoId: produto.id,
+              produtoNome: produto.nome,
+              tipo: "ajuste_positivo",
+              estoqueAnterior: estoqueAtual,
+              estoqueContado: novoEstoque,
+              quantidadeAjustada: delta,
+              precoVenda: Number(produto.precoVendaPadrao || 0),
+              faturamento: 0,
+              custo: 0,
+              lucro: 0
+            });
+          } else {
+            itens.push({
+              produtoId: produto.id,
+              produtoNome: produto.nome,
+              tipo: "sem_alteracao",
+              estoqueAnterior: estoqueAtual,
+              estoqueContado: novoEstoque,
+              faturamento: 0,
+              custo: 0,
+              lucro: 0
+            });
+          }
+        }
+
+        batch.set(contagemRef, {
+          data,
+          observacao,
+          itens,
+          faturamentoTotal,
+          custoTotal,
+          lucroTotal,
+          ajustesPositivos,
+          status: "confirmada",
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+
+        if (lucroTotal > 0) {
+          contasAtivas.forEach(conta => {
+            const valor = lucroTotal * (Number(conta.percentual || 0) / 100);
+            const movRef = doc(collection(db, "movimentosDistribuicao"));
+            batch.set(movRef, {
+              tipo: "credito",
+              origem: "baixa_estoque",
+              contagemId: contagemRef.id,
+              contaId: conta.id,
+              nomeConta: conta.nome,
+              percentualAplicado: Number(conta.percentual || 0),
+              lucroBase: lucroTotal,
+              valor,
+              data,
+              observacao: "Lucro gerado pela atualização de estoque",
+              criadoEm: serverTimestamp()
+            });
+          });
+        }
+
+        await batch.commit();
+        $("contagemObs").value = "";
+        await refreshData();
+        showToast(`Contagem salva. Lucro distribuído: ${brl(lucroTotal)}.`);
+      } catch (error) {
+        console.error(error);
+        setStatus("Erro ao salvar contagem", "err");
+        showToast(`Erro ao salvar contagem: ${error.message}`);
+      }
+    }
+
+    async function saveSaque(event) {
+      event.preventDefault();
+      const contaId = $("saqueConta").value;
+      const conta = accountById(contaId);
+      const valor = toNumber($("saqueValor").value);
+      const data = $("saqueData").value || today();
+      const observacao = $("saqueObs").value || "";
+      const balance = getBalances().find(b => b.conta.id === contaId);
+      const saldo = balance?.saldo || 0;
+
+      if (!conta) return showToast("Selecione uma conta válida.");
+      if (valor <= 0) return showToast("Informe um valor de saque válido.");
+      if (valor - saldo > 0.005) return showToast(`Saldo insuficiente para ${conta.nome}. Disponível: ${brl(saldo)}.`);
+
+      try {
+        await addDoc(collection(db, "movimentosDistribuicao"), {
+          tipo: "debito",
+          origem: "saque",
+          contaId,
+          nomeConta: conta.nome,
+          valor,
+          data,
+          observacao,
+          criadoEm: serverTimestamp()
+        });
+        $("saqueValor").value = "";
+        $("saqueObs").value = "";
+        await refreshData();
+        showToast("Saque/pagamento registrado com sucesso.");
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro ao registrar saque: ${error.message}`);
+      }
+    }
+
+    async function saveProduto(event) {
+      event.preventDefault();
+      const nome = $("produtoNome").value.trim();
+      const categoria = $("produtoCategoria").value.trim();
+      const precoVendaPadrao = toNumber($("produtoPreco").value);
+      const estoqueMinimo = toNumber($("produtoEstoqueMinimo").value);
+      if (!nome) return showToast("Informe o nome do produto.");
+      if (precoVendaPadrao <= 0) return showToast("Informe preço de venda padrão.");
+
+      try {
+        await addDoc(collection(db, "produtos"), {
+          nome,
+          nomeNormalizado: normalizeText(nome),
+          categoria,
+          precoVendaPadrao,
+          estoqueMinimo,
+          ativo: true,
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+        event.target.reset();
+        await refreshData();
+        showToast("Produto cadastrado com sucesso.");
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro ao salvar produto: ${error.message}`);
+      }
+    }
+
+    async function saveConta(event) {
+      event.preventDefault();
+      const nome = $("contaNome").value.trim();
+      const percentual = toNumber($("contaPercentual").value);
+      const tipo = $("contaTipo").value;
+      if (!nome) return showToast("Informe o nome da conta.");
+      if (percentual < 0) return showToast("Informe percentual válido.");
+
+      try {
+        await addDoc(collection(db, "contasDistribuicao"), {
+          nome,
+          percentual,
+          tipo,
+          ativo: true,
+          ordem: state.contas.length + 1,
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+        event.target.reset();
+        await refreshData();
+        showToast("Conta adicionada.");
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro ao salvar conta: ${error.message}`);
+      }
+    }
+
+    async function handleConfigClick(event) {
+      const salvarBtn = event.target.closest(".salvar-percentual");
+      const alternarBtn = event.target.closest(".alternar-conta");
+      if (salvarBtn) {
+        const contaId = salvarBtn.dataset.contaId;
+        const input = document.querySelector(`.conta-percentual-input[data-conta-id="${contaId}"]`);
+        const percentual = toNumber(input.value);
+        await updateDoc(doc(db, "contasDistribuicao", contaId), { percentual, atualizadoEm: serverTimestamp() });
+        await refreshData();
+        showToast("Percentual atualizado.");
+      }
+      if (alternarBtn) {
+        const contaId = alternarBtn.dataset.contaId;
+        const conta = accountById(contaId);
+        await updateDoc(doc(db, "contasDistribuicao", contaId), { ativo: conta.ativo === false, atualizadoEm: serverTimestamp() });
+        await refreshData();
+        showToast("Status da conta atualizado.");
+      }
+    }
+
+    async function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file, "UTF-8");
+      });
+    }
+
+    async function handleReadFile() {
+      const file = $("notaArquivo").files?.[0];
+      if (!file) return showToast("Selecione um arquivo XML ou JSON.");
+      try {
+        const text = await readFileAsText(file);
+        const isJson = file.name.toLowerCase().endsWith(".json") || file.type.includes("json");
+        const nota = isJson ? parseJsonNota(text) : parseXmlNfe(text);
+        preparePreview(nota);
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro ao ler arquivo: ${error.message}`);
+      }
+    }
+
+    function handleReadJson() {
+      const text = $("notaJsonTexto").value.trim();
+      if (!text) return showToast("Cole o JSON da nota.");
+      try {
+        preparePreview(parseJsonNota(text));
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro no JSON: ${error.message}`);
+      }
+    }
+
+    function clearImport() {
+      state.previewNota = null;
+      $("notaPreviewCard").style.display = "none";
+      $("notaArquivo").value = "";
+      $("notaJsonTexto").value = "";
+    }
+
+    function setView(viewId) {
+      document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+      document.querySelectorAll(".nav button").forEach(b => b.classList.remove("active"));
+      $(viewId).classList.add("active");
+      document.querySelector(`.nav button[data-view="${viewId}"]`)?.classList.add("active");
+      $("pageTitle").textContent = titles[viewId][0];
+      $("pageSubtitle").textContent = titles[viewId][1];
+    }
+
+    function bindEvents() {
+      document.querySelectorAll(".nav button").forEach(button => {
+        button.addEventListener("click", () => setView(button.dataset.view));
+      });
+
+      $("produtoForm").addEventListener("submit", saveProduto);
+      $("btnLerArquivo").addEventListener("click", handleReadFile);
+      $("btnLerJson").addEventListener("click", handleReadJson);
+      $("btnLimparImportacao").addEventListener("click", clearImport);
+      $("btnCancelarNota").addEventListener("click", clearImport);
+      $("btnConfirmarNota").addEventListener("click", confirmNota);
+      $("btnSalvarContagem").addEventListener("click", saveStockCount);
+      $("btnZerarInputsEstoque").addEventListener("click", () => document.querySelectorAll(".estoque-input").forEach(i => i.value = ""));
+      $("saqueForm").addEventListener("submit", saveSaque);
+      $("saqueConta").addEventListener("change", updateSaqueSaldo);
+      $("contaForm").addEventListener("submit", saveConta);
+      $("contasTabela").addEventListener("click", handleConfigClick);
+
+      $("notaItensPreview").addEventListener("change", event => {
+        if (event.target.classList.contains("preview-produto-select")) {
+          syncPreviewFromInputs();
+          renderNotaPreview();
+        }
+      });
+    }
+
+    $("contagemData").value = today();
+    $("saqueData").value = today();
+
+    bindEvents();
+    refreshData();
+  </script>
+</body>
+</html>
