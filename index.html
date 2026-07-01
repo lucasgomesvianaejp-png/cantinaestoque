@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cantina Estoque</title>
+  <title>Cantina Estoque V6</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -460,9 +460,9 @@
             <div class="hint">Soma das baixas de estoque.</div>
           </div>
           <div class="card metric">
-            <div class="label">Total sacado/pago</div>
+            <div class="label">Sacado / ajustado</div>
             <div class="value" id="dashSacado">R$ 0,00</div>
-            <div class="hint">Saques por conta de distribuição.</div>
+            <div class="hint">Saques e ajustes de lucro por correção.</div>
           </div>
           <div class="card metric">
             <div class="label">Saldo disponível</div>
@@ -480,7 +480,7 @@
           <div class="card">
             <div class="section-title">
               <h3>Saldos por conta</h3>
-              <small>Créditos - saques</small>
+              <small>Créditos - saques/ajustes</small>
             </div>
             <div id="dashSaldosContas" class="table-wrap"></div>
           </div>
@@ -517,6 +517,14 @@
               <label>Estoque mínimo</label>
               <input id="produtoEstoqueMinimo" inputmode="numeric" placeholder="0" />
             </div>
+            <div>
+              <label>Unidade de venda</label>
+              <input id="produtoUnidadeVenda" placeholder="un" value="un" />
+            </div>
+            <div>
+              <label>Itens por embalagem padrão</label>
+              <input id="produtoFatorCompraPadrao" inputmode="decimal" placeholder="1" value="1" />
+            </div>
             <div class="actions">
               <button class="primary" type="submit">Salvar produto</button>
             </div>
@@ -539,6 +547,29 @@
             </div>
           </div>
           <div id="produtoPerfilResumo" class="grid cards" style="margin-bottom:16px;"></div>
+          <div class="card-soft" style="margin-bottom:16px;">
+            <div class="section-title">
+              <h3>Conversão de embalagem</h3>
+              <small>Ex.: compra 1 pacote, mas vende 24 unidades</small>
+            </div>
+            <div class="form-grid four">
+              <div>
+                <label>Unidade de venda</label>
+                <input id="produtoPerfilUnidadeVenda" placeholder="un" />
+              </div>
+              <div>
+                <label>Itens por embalagem padrão</label>
+                <input id="produtoPerfilFatorCompra" inputmode="decimal" placeholder="1" />
+              </div>
+              <div class="wide">
+                <label>Como usar</label>
+                <input disabled value="Na importação da nota, o sistema converte qtd da nota × itens por embalagem." />
+              </div>
+              <div class="actions">
+                <button id="btnSalvarConversaoProduto" class="primary" type="button">Salvar conversão</button>
+              </div>
+            </div>
+          </div>
           <div class="card-soft" style="margin-bottom:16px;">
             <div class="section-title">
               <h3>Alterar preço de venda</h3>
@@ -668,7 +699,7 @@
             <small>A diferença menor vira venda presumida</small>
           </div>
           <div class="notice" style="margin-bottom: 14px;">
-            Preencha apenas os produtos que foram contados. Se o novo estoque for menor que o sistema, o sistema calcula venda, custo, lucro e distribui automaticamente. Se for maior, registra ajuste positivo sem lucro.
+            Preencha apenas os produtos que foram contados. O estoque de referência é calculado pela data da contagem: notas com data posterior não entram na apuração. Se o estoque contado for menor, vira venda presumida. Se for maior, o sistema registra ajuste positivo e, quando possível, estorna automaticamente o lucro reconhecido a mais em contagens anteriores.
           </div>
           <div class="form-grid three" style="margin-bottom: 14px;">
             <div>
@@ -734,7 +765,7 @@
         <div class="card">
           <div class="section-title">
             <h3>Extrato recente da distribuição</h3>
-            <small>Créditos e saques</small>
+            <small>Créditos, saques e ajustes</small>
           </div>
           <div id="extratoDistribuicao" class="table-wrap"></div>
         </div>
@@ -789,7 +820,10 @@
         <div id="notaDetalheCard" class="card" style="display:none;">
           <div class="section-title">
             <h3 id="notaDetalheTitulo">Detalhe da nota</h3>
-            <div class="actions"><button id="btnFecharNotaDetalhe" class="ghost" type="button">Fechar</button></div>
+            <div class="actions">
+              <button id="btnExcluirNotaDetalhe" class="danger" type="button">Excluir nota sem baixa</button>
+              <button id="btnFecharNotaDetalhe" class="ghost" type="button">Fechar</button>
+            </div>
           </div>
           <div id="notaDetalheResumo" class="grid cards" style="margin-bottom:16px;"></div>
           <div id="notaDetalheItens" class="table-wrap"></div>
@@ -893,7 +927,7 @@
       dashboard: ["Dashboard", "Resumo financeiro e operacional da cantina."],
       produtos: ["Produtos", "Cadastro dos produtos principais e visão de estoque."],
       importar: ["Importar Nota", "Pré-carregue XML ou JSON, confira os itens e confirme a entrada."],
-      estoque: ["Atualizar Estoque", "Informe o estoque contado. A baixa gera lucro automaticamente."],
+      estoque: ["Atualizar Estoque", "Informe o estoque contado na data correta. O sistema respeita notas futuras e corrige lucro quando encontrar estoque a mais."],
       distribuicao: ["Distribuição", "Saldos individuais, saques e extrato do lucro."],
       relatorios: ["Comparativo", "Ranking de lucro, vendas, compras e estoque por produto."],
       historico: ["Histórico", "Notas importadas e atualizações de estoque."],
@@ -974,6 +1008,28 @@
 
     function productById(id) {
       return state.produtos.find(p => p.id === id);
+    }
+
+    function getProductUnit(produto) {
+      return String(produto?.unidadeVenda || "un").trim() || "un";
+    }
+
+    function getProductDefaultFactor(produto) {
+      const fator = Number(produto?.fatorCompraPadrao ?? produto?.unidadesPorEmbalagem ?? 1);
+      return fator > 0 ? fator : 1;
+    }
+
+    function getItemPurchaseQty(item) {
+      return Number(item?.quantidadeCompra ?? item?.quantidadeNota ?? item?.qtdCompra ?? item?.quantidade ?? 0);
+    }
+
+    function getItemFactor(item) {
+      const fator = Number(item?.fatorConversao ?? item?.unidadesPorEmbalagem ?? item?.multiplicador ?? 1);
+      return fator > 0 ? fator : 1;
+    }
+
+    function stockQtyFromPurchase(qtdCompra, fator) {
+      return Number(qtdCompra || 0) * (Number(fator || 0) > 0 ? Number(fator || 0) : 1);
     }
 
     function accountById(id) {
@@ -1071,6 +1127,12 @@
             s.lucro += Number(item.lucro || 0);
             s.baixasVezes += 1;
           }
+          if (item.tipo === "ajuste_positivo" && Number(item.lucroRevertido || 0) > 0) {
+            s.vendasQtd -= Number(item.quantidadeRevertida || 0);
+            s.faturamento -= Number(item.faturamentoRevertido || 0);
+            s.custoVendido -= Number(item.custoRevertido || 0);
+            s.lucro -= Number(item.lucroRevertido || 0);
+          }
         });
       });
 
@@ -1088,9 +1150,161 @@
           if (item.produtoId === produtoId && item.tipo === "venda_presumida") {
             vendas.push({ contagemId: contagem.id, data: contagem.data, observacao: contagem.observacao || "", ...item });
           }
+          if (item.produtoId === produtoId && item.tipo === "ajuste_positivo" && Number(item.lucroRevertido || 0) > 0) {
+            vendas.push({
+              contagemId: contagem.id,
+              data: contagem.data,
+              observacao: contagem.observacao || "",
+              produtoId: item.produtoId,
+              produtoNome: item.produtoNome,
+              tipo: "correcao_lucro",
+              quantidadeVendida: -Number(item.quantidadeRevertida || 0),
+              precoVenda: 0,
+              faturamento: -Number(item.faturamentoRevertido || 0),
+              custo: -Number(item.custoRevertido || 0),
+              lucro: -Number(item.lucroRevertido || 0),
+              detalhe: "Estoque encontrado a mais; estorno de lucro reconhecido anteriormente."
+            });
+          }
         });
       });
       return vendas.sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+    }
+
+    function dateKey(value) {
+      return String(value || today()).slice(0, 10);
+    }
+
+    function isDateBefore(a, b) {
+      return dateKey(a) < dateKey(b);
+    }
+
+    function isDateOnOrBefore(a, b) {
+      return dateKey(a) <= dateKey(b);
+    }
+
+    function getCountProductItems(produtoId) {
+      const out = [];
+      state.contagens.forEach(contagem => {
+        (contagem.itens || []).forEach((item, index) => {
+          if (item.produtoId === produtoId) out.push({ contagem, item, index });
+        });
+      });
+      return out;
+    }
+
+    function latestCountItemBeforeDate(produtoId, data) {
+      const alvo = dateKey(data);
+      return getCountProductItems(produtoId)
+        .filter(({ contagem }) => dateKey(contagem.data) <= alvo)
+        .sort((a, b) => dateKey(b.contagem.data).localeCompare(dateKey(a.contagem.data)) || String(b.contagem.id).localeCompare(String(a.contagem.id)))[0] || null;
+    }
+
+    function getExpectedStockForCount(produtoId, data) {
+      const alvo = dateKey(data);
+      const ultima = latestCountItemBeforeDate(produtoId, alvo);
+      const dataBase = ultima ? dateKey(ultima.contagem.data) : "0000-00-00";
+      let estoque = ultima ? Number(ultima.item.estoqueContado ?? ultima.item.estoqueFinal ?? 0) : 0;
+
+      state.lotes.forEach(lote => {
+        if (lote.produtoId !== produtoId) return;
+        const dataLote = dateKey(lote.dataCompra || lote.data || "0000-00-00");
+        if (dataLote > dataBase && dataLote <= alvo) {
+          estoque += Number(lote.quantidadeInicial || 0);
+        }
+      });
+
+      return estoque;
+    }
+
+    function latestCountDate() {
+      return state.contagens.reduce((latest, c) => dateKey(c.data) > latest ? dateKey(c.data) : latest, "0000-00-00");
+    }
+
+    function saleItemKey(contagem, item, index = 0) {
+      return item.itemId || `${contagem.id || "sem-contagem"}:${item.produtoId || "produto"}:${dateKey(contagem.data)}:${index}`;
+    }
+
+    function getReversedQtyBySaleKey() {
+      const map = new Map();
+      state.contagens.forEach(contagem => {
+        (contagem.itens || []).forEach(item => {
+          (item.reversoes || []).forEach(rev => {
+            if (!rev.saleKey) return;
+            map.set(rev.saleKey, (map.get(rev.saleKey) || 0) + Number(rev.quantidade || 0));
+          });
+        });
+      });
+      return map;
+    }
+
+    function planPositiveStockCorrection(produtoId, quantidadeEncontrada, data) {
+      let restante = Number(quantidadeEncontrada || 0);
+      const reversed = getReversedQtyBySaleKey();
+      const reversoes = [];
+      let quantidadeRevertida = 0;
+      let faturamentoRevertido = 0;
+      let custoRevertido = 0;
+      let lucroRevertido = 0;
+
+      const vendasAnteriores = [];
+      state.contagens.forEach(contagem => {
+        if (!isDateOnOrBefore(contagem.data, data)) return;
+        (contagem.itens || []).forEach((item, index) => {
+          if (item.produtoId === produtoId && item.tipo === "venda_presumida" && Number(item.quantidadeVendida || 0) > 0) {
+            vendasAnteriores.push({ contagem, item, index, key: saleItemKey(contagem, item, index) });
+          }
+        });
+      });
+
+      vendasAnteriores.sort((a, b) => dateKey(b.contagem.data).localeCompare(dateKey(a.contagem.data)) || String(b.contagem.id).localeCompare(String(a.contagem.id)));
+
+      for (const venda of vendasAnteriores) {
+        if (restante <= 0.0001) break;
+        const qtdVendida = Number(venda.item.quantidadeVendida || 0);
+        const jaRevertida = Number(reversed.get(venda.key) || 0);
+        const disponivel = Math.max(0, qtdVendida - jaRevertida);
+        if (disponivel <= 0) continue;
+
+        const qtd = Math.min(restante, disponivel);
+        const precoUnitario = Number(venda.item.precoVenda || 0);
+        const custoUnitario = qtdVendida > 0 ? Number(venda.item.custo || 0) / qtdVendida : 0;
+        const lucroUnitario = qtdVendida > 0 ? Number(venda.item.lucro || 0) / qtdVendida : (precoUnitario - custoUnitario);
+        const faturamento = qtd * precoUnitario;
+        const custo = qtd * custoUnitario;
+        const lucro = qtd * lucroUnitario;
+
+        reversoes.push({
+          saleKey: venda.key,
+          contagemId: venda.contagem.id,
+          data: dateKey(venda.contagem.data),
+          quantidade: qtd,
+          precoVenda: precoUnitario,
+          custoUnitario,
+          lucroUnitario,
+          faturamentoRevertido: faturamento,
+          custoRevertido: custo,
+          lucroRevertido: lucro
+        });
+
+        quantidadeRevertida += qtd;
+        faturamentoRevertido += faturamento;
+        custoRevertido += custo;
+        lucroRevertido += lucro;
+        restante -= qtd;
+      }
+
+      const custoMedioRevertido = quantidadeRevertida > 0 ? custoRevertido / quantidadeRevertida : 0;
+      return {
+        quantidadeEncontrada: Number(quantidadeEncontrada || 0),
+        quantidadeRevertida,
+        quantidadeSemReversao: Math.max(0, Number(quantidadeEncontrada || 0) - quantidadeRevertida),
+        faturamentoRevertido,
+        custoRevertido,
+        lucroRevertido,
+        custoMedioRevertido,
+        reversoes
+      };
     }
 
     function htmlEscape(text) {
@@ -1236,6 +1450,8 @@
         return [
           `<button class="link-btn abrir-produto" data-produto-id="${p.id}" type="button">${htmlEscape(p.nome)}</button>`,
           htmlEscape(p.categoria || "-"),
+          htmlEscape(getProductUnit(p)),
+          Number(getProductDefaultFactor(p)).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           brl(getSalePriceForProduct(p.id, today())),
           Number(estoque).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           brl(custoMedio),
@@ -1246,9 +1462,9 @@
         ];
       });
       $("produtosTabela").innerHTML = rows.length ? renderTable(
-        ["Produto", "Categoria", "Venda atual", "Estoque", "Custo médio", "Lucro médio", "Valor estoque", "Mínimo", "Ações"],
+        ["Produto", "Categoria", "Unid.", "Itens/emb.", "Venda atual", "Estoque", "Custo médio", "Lucro médio", "Valor estoque", "Mínimo", "Ações"],
         rows,
-        [false, false, true, true, true, true, true, true, false]
+        [false, false, false, true, true, true, true, true, true, true, false]
       ) : `<div class="empty">Nenhum produto cadastrado ainda.</div>`;
     }
 
@@ -1257,14 +1473,17 @@
         $("estoqueTabela").innerHTML = `<div class="empty">Cadastre ou importe produtos antes de atualizar estoque.</div>`;
         return;
       }
+      const dataContagem = $("contagemData")?.value || today();
       const rows = state.produtos.map(p => {
-        const estoque = getStockByProductId(p.id);
+        const estoqueNaData = getExpectedStockForCount(p.id, dataContagem);
+        const estoqueAtual = getStockByProductId(p.id);
         const custoMedio = getAverageCostByProductId(p.id);
-        const precoDataContagem = getSalePriceForProduct(p.id, $("contagemData")?.value || today());
+        const precoDataContagem = getSalePriceForProduct(p.id, dataContagem);
         return `
           <tr>
-            <td><strong>${htmlEscape(p.nome)}</strong><br><span class="muted">${htmlEscape(p.categoria || "Sem categoria")}</span></td>
-            <td class="num">${Number(estoque).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</td>
+            <td><strong>${htmlEscape(p.nome)}</strong><br><span class="muted">${htmlEscape(p.categoria || "Sem categoria")} · estoque em ${htmlEscape(getProductUnit(p))}</span></td>
+            <td class="num"><strong>${Number(estoqueNaData).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</strong><br><span class="muted">na data</span></td>
+            <td class="num">${Number(estoqueAtual).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}<br><span class="muted">atual</span></td>
             <td class="num">${brl(precoDataContagem)}</td>
             <td class="num">${brl(custoMedio)}</td>
             <td><input class="compact-input estoque-input" data-produto-id="${p.id}" inputmode="decimal" placeholder="Novo estoque" /></td>
@@ -1272,8 +1491,11 @@
       }).join("");
 
       $("estoqueTabela").innerHTML = `
+        <div class="notice" style="margin-bottom: 12px;">
+          Referência da contagem: <strong>${formatDate(dataContagem)}</strong>. Notas com data posterior ficam fora da apuração dessa contagem.
+        </div>
         <table>
-          <thead><tr><th>Produto</th><th class="num">Estoque sistema</th><th class="num">Venda na data</th><th class="num">Custo médio</th><th>Novo estoque contado</th></tr></thead>
+          <thead><tr><th>Produto</th><th class="num">Estoque sistema na data</th><th class="num">Estoque atual</th><th class="num">Venda na data</th><th class="num">Custo médio atual</th><th>Novo estoque contado</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
     }
@@ -1300,7 +1522,7 @@
         recent.map(m => [
           formatDate(m.data),
           htmlEscape(m.nomeConta || accountById(m.contaId)?.nome || "-"),
-          m.tipo === "credito" ? `<span class="badge ok">Crédito</span>` : `<span class="badge danger">Saque</span>`,
+          m.tipo === "credito" ? `<span class="badge ok">Crédito</span>` : (m.origem === "ajuste_lucro_estoque" ? `<span class="badge warn">Ajuste</span>` : `<span class="badge danger">Saque</span>`),
           `<strong>${m.tipo === "credito" ? "+" : "-"} ${brl(m.valor || 0)}</strong>`,
           htmlEscape(m.observacao || m.origem || "-")
         ]),
@@ -1323,15 +1545,17 @@
       ) : `<div class="empty">Nenhuma nota importada ainda.</div>`;
 
       $("historicoContagens").innerHTML = state.contagens.length ? renderTable(
-        ["Data", "Faturamento", "Custo", "Lucro", "Obs."],
+        ["Data", "Faturamento", "Custo", "Lucro bruto", "Estorno", "Lucro líquido", "Obs."],
         state.contagens.slice(0, 80).map(c => [
           formatDate(c.data),
           brl(c.faturamentoTotal || 0),
           brl(c.custoTotal || 0),
           `<strong>${brl(c.lucroTotal || 0)}</strong>`,
+          Number(c.lucroRevertidoTotal || 0) > 0 ? `<span class="danger-text">-${brl(c.lucroRevertidoTotal || 0)}</span>` : brl(0),
+          `<strong>${brl(Number(c.lucroTotal || 0) - Number(c.lucroRevertidoTotal || 0))}</strong>`,
           htmlEscape(c.observacao || "-")
         ]),
-        [false, true, true, true, false]
+        [false, true, true, true, true, true, false]
       ) : `<div class="empty">Nenhuma atualização de estoque ainda.</div>`;
     }
 
@@ -1422,12 +1646,14 @@
       $("produtoPerfilTitulo").textContent = `Perfil: ${produto.nome}`;
       $("precoDataInicio").value = $("precoDataInicio").value || today();
       $("precoNovoValor").placeholder = brl(getSalePriceForProduct(produto.id, today()));
+      $("produtoPerfilUnidadeVenda").value = getProductUnit(produto);
+      $("produtoPerfilFatorCompra").value = String(getProductDefaultFactor(produto)).replace('.', ',');
 
       const stats = getProductStats().find(s => s.produto.id === produto.id) || {};
       $("produtoPerfilResumo").innerHTML = `
-        <div class="mini-metric"><div class="label">Estoque atual</div><div class="value">${Number(stats.estoque || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</div></div>
+        <div class="mini-metric"><div class="label">Estoque atual</div><div class="value">${Number(stats.estoque || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ${htmlEscape(getProductUnit(produto))}</div></div>
+        <div class="mini-metric"><div class="label">Itens por embalagem</div><div class="value">${Number(getProductDefaultFactor(produto)).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</div></div>
         <div class="mini-metric"><div class="label">Preço de venda atual</div><div class="value">${brl(getSalePriceForProduct(produto.id, today()))}</div></div>
-        <div class="mini-metric"><div class="label">Custo médio atual</div><div class="value">${brl(stats.custoMedio || 0)}</div></div>
         <div class="mini-metric"><div class="label">Lucro realizado</div><div class="value">${brl(stats.lucro || 0)}</div></div>
       `;
 
@@ -1435,7 +1661,7 @@
         .filter(i => i.produtoId === produto.id)
         .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
       $("produtoPerfilCompras").innerHTML = compras.length ? renderTable(
-        ["Data", "Nota", "Fornecedor", "Descrição", "Qtd", "Custo", "Unit."],
+        ["Data", "Nota", "Fornecedor", "Descrição", "Qtd nota", "Itens/emb.", "Qtd estoque", "Custo", "Unit. estoque"],
         compras.map(i => {
           const nota = getNotaById(i.notaId);
           return [
@@ -1443,44 +1669,49 @@
             htmlEscape(nota?.numeroNota || i.notaId || "-"),
             htmlEscape(i.fornecedor || nota?.fornecedor || "-"),
             htmlEscape(i.descricaoOriginal || "-"),
+            Number(getItemPurchaseQty(i)).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+            Number(getItemFactor(i)).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
             Number(i.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
             brl(i.custoTotal || 0),
             brl(i.custoUnitario || 0)
           ];
         }),
-        [false, false, false, false, true, true, true]
+        [false, false, false, false, true, true, true, true, true]
       ) : `<div class="empty">Nenhuma compra importada para este produto.</div>`;
 
       const vendas = getProductSales(produto.id);
       $("produtoPerfilVendas").innerHTML = vendas.length ? renderTable(
-        ["Data", "Qtd vendida", "Preço usado", "Faturamento", "Custo", "Lucro", "Obs."],
+        ["Data", "Tipo", "Qtd", "Preço usado", "Faturamento", "Custo", "Lucro", "Obs."],
         vendas.map(v => [
           formatDate(v.data),
+          v.tipo === "correcao_lucro" ? `<span class="badge warn">Correção</span>` : `<span class="badge ok">Venda</span>`,
           Number(v.quantidadeVendida || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
-          brl(v.precoVenda || 0),
+          v.tipo === "correcao_lucro" ? "-" : brl(v.precoVenda || 0),
           brl(v.faturamento || 0),
           brl(v.custo || 0),
           `<strong>${brl(v.lucro || 0)}</strong>`,
-          htmlEscape(v.observacao || "-")
+          htmlEscape(v.detalhe || v.observacao || "-")
         ]),
-        [false, true, true, true, true, true, false]
+        [false, false, true, true, true, true, true, false]
       ) : `<div class="empty">Nenhuma venda/baixa registrada para este produto.</div>`;
 
       const lotes = state.lotes
         .filter(l => l.produtoId === produto.id)
         .sort((a, b) => String(b.dataCompra || "").localeCompare(String(a.dataCompra || "")));
       $("produtoPerfilLotes").innerHTML = lotes.length ? renderTable(
-        ["Data", "Nota", "Qtd inicial", "Qtd atual", "Custo unit.", "Preço lote", "Origem"],
+        ["Data", "Nota", "Qtd nota", "Itens/emb.", "Qtd inicial", "Qtd atual", "Custo unit.", "Preço lote", "Origem"],
         lotes.map(l => [
           formatDate(l.dataCompra),
           htmlEscape(getNotaById(l.notaId)?.numeroNota || l.notaId || "-"),
+          Number(getItemPurchaseQty(l)).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+          Number(getItemFactor(l)).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           Number(l.quantidadeInicial || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           Number(l.quantidadeAtual || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           brl(l.custoUnitario || 0),
           brl(l.precoVenda || 0),
           htmlEscape(l.origem || "-")
         ]),
-        [false, false, true, true, true, true, false]
+        [false, false, true, true, true, true, true, true, false]
       ) : `<div class="empty">Nenhum lote encontrado para este produto.</div>`;
 
       const historico = getPriceHistoryForProduct(produto.id);
@@ -1523,17 +1754,19 @@
         <div class="mini-metric"><div class="label">Itens / unidades</div><div class="value">${itens.length} / ${Number(qtdTotal).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</div></div>
       `;
       $("notaDetalheItens").innerHTML = itens.length ? renderTable(
-        ["Produto", "Descrição original", "Código", "Qtd", "Custo total", "Custo unit.", "Venda informada"],
+        ["Produto", "Descrição original", "Código", "Qtd nota", "Itens/emb.", "Qtd estoque", "Custo total", "Custo unit. estoque", "Venda informada"],
         itens.map(i => [
           `<button class="link-btn abrir-produto" data-produto-id="${i.produtoId}" type="button">${htmlEscape(i.produtoNome || productById(i.produtoId)?.nome || "-")}</button>`,
           htmlEscape(i.descricaoOriginal || "-"),
           htmlEscape(i.codigo || "-"),
+          Number(getItemPurchaseQty(i)).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+          Number(getItemFactor(i)).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           Number(i.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           brl(i.custoTotal || 0),
           brl(i.custoUnitario || 0),
           brl(i.precoVenda || 0)
         ]),
-        [false, false, false, true, true, true, true]
+        [false, false, false, true, true, true, true, true, true]
       ) : `<div class="empty">Nenhum item encontrado para esta nota.</div>`;
     }
 
@@ -1605,13 +1838,17 @@
       const itens = Array.from(xml.querySelectorAll("det")).map(det => {
         const prod = det.querySelector("prod");
         const descricao = getText(prod, "xProd");
-        const quantidade = toNumber(getText(prod, "qCom") || getText(prod, "qTrib"));
+        const quantidadeCompra = toNumber(getText(prod, "qCom") || getText(prod, "qTrib"));
+        const fatorConversao = 1;
+        const quantidade = stockQtyFromPurchase(quantidadeCompra, fatorConversao);
         const custoTotal = toNumber(getText(prod, "vProd"));
         const custoUnitario = quantidade > 0 ? custoTotal / quantidade : toNumber(getText(prod, "vUnCom"));
         const codigo = getText(prod, "cProd");
         return {
           codigo,
           descricaoOriginal: descricao,
+          quantidadeCompra,
+          fatorConversao,
           quantidade,
           custoTotal,
           custoUnitario,
@@ -1628,16 +1865,23 @@
       const itensRaw = raw.itens || raw.items || raw.produtos || raw.detalhes || [];
       if (!Array.isArray(itensRaw) || !itensRaw.length) throw new Error("JSON sem lista de itens. Use a chave itens: [...].");
       const itens = itensRaw.map(item => {
-        const quantidade = toNumber(item.quantidade ?? item.qtd ?? item.qCom ?? item.unidades);
+        const quantidadeCompra = toNumber(item.quantidadeCompra ?? item.quantidadeNota ?? item.qtdCompra ?? item.embalagens ?? item.quantidade ?? item.qtd ?? item.qCom ?? item.unidades);
+        const fatorConversao = toNumber(item.fatorConversao ?? item.unidadesPorEmbalagem ?? item.multiplicador ?? item.itensPorEmbalagem ?? 1) || 1;
+        const quantidadeEstoqueInformada = toNumber(item.quantidadeEstoque ?? item.quantidadeVendavel ?? item.quantidadeUnidades ?? item.unidadesVendaveis);
+        const quantidade = quantidadeEstoqueInformada > 0 ? quantidadeEstoqueInformada : stockQtyFromPurchase(quantidadeCompra, fatorConversao);
         const custoTotal = toNumber(item.custoTotal ?? item.valorTotal ?? item.vProd ?? item.total);
         const custoUnitario = quantidade > 0 ? (custoTotal / quantidade) : toNumber(item.custoUnitario ?? item.valorUnitario ?? item.vUnCom);
         return {
           codigo: item.codigo || item.cProd || "",
           descricaoOriginal: item.descricaoOriginal || item.descricao || item.nome || item.xProd || "",
+          quantidadeCompra,
+          fatorConversao,
           quantidade,
           custoTotal: custoTotal || quantidade * custoUnitario,
           custoUnitario,
-          precoVenda: toNumber(item.precoVenda ?? item.venda ?? item.preco)
+          precoVenda: toNumber(item.precoVenda ?? item.venda ?? item.preco),
+          unidadeCompra: item.unidadeCompra || item.unCompra || "emb.",
+          unidadeVenda: item.unidadeVenda || item.unVenda || "un"
         };
       }).filter(i => i.descricaoOriginal && i.quantidade > 0);
 
@@ -1657,6 +1901,11 @@
         const normalized = normalizeText(item.descricaoOriginal);
         const alias = state.aliases.get(normalized);
         const produto = alias ? productById(alias.produtoId) : null;
+        const quantidadeCompra = Number(item.quantidadeCompra ?? item.quantidadeNota ?? item.quantidade ?? 0);
+        const fatorInformado = Number(item.fatorConversao ?? item.unidadesPorEmbalagem ?? 0);
+        const fatorConversao = fatorInformado > 0 ? fatorInformado : (produto ? getProductDefaultFactor(produto) : 1);
+        const quantidade = stockQtyFromPurchase(quantidadeCompra, fatorConversao);
+        const custoTotal = Number(item.custoTotal || 0);
         return {
           ...item,
           rowId: `row-${index}-${Date.now()}`,
@@ -1664,6 +1913,12 @@
           produtoId: produto?.id || "",
           produtoNomeNovo: produto ? "" : item.descricaoOriginal,
           produtoCategoriaNova: "",
+          quantidadeCompra,
+          fatorConversao,
+          quantidade,
+          custoUnitario: quantidade > 0 ? custoTotal / quantidade : Number(item.custoUnitario || 0),
+          unidadeCompra: item.unidadeCompra || "emb.",
+          unidadeVenda: item.unidadeVenda || getProductUnit(produto) || "un",
           precoVenda: item.precoVenda || produto?.precoVendaPadrao || 0,
           status: produto ? "reconhecido" : "pendente"
         };
@@ -1685,15 +1940,21 @@
       const rows = nota.itens.map((item, idx) => {
         const produto = productById(item.produtoId);
         const status = item.produtoId ? `<span class="badge ok">${item.status === "reconhecido" ? "Reconhecido" : "Atribuído"}</span>` : `<span class="badge warn">Pendente</span>`;
+        const quantidadeCompra = getItemPurchaseQty(item);
+        const fatorConversao = getItemFactor(item);
+        const quantidadeEstoque = stockQtyFromPurchase(quantidadeCompra, fatorConversao);
+        const custoUnitarioEstoque = quantidadeEstoque > 0 ? Number(item.custoTotal || 0) / quantidadeEstoque : 0;
         return `
           <tr data-row-id="${item.rowId}">
             <td>
               <strong>${htmlEscape(item.descricaoOriginal)}</strong><br>
               <span class="muted">${htmlEscape(item.codigo || "")}</span>
             </td>
-            <td class="num">${Number(item.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</td>
+            <td><input class="compact-input preview-qtd-compra" data-index="${idx}" inputmode="decimal" value="${String(quantidadeCompra || 0).replace('.', ',')}" /></td>
+            <td><input class="compact-input preview-fator-conversao" data-index="${idx}" inputmode="decimal" value="${String(fatorConversao || 1).replace('.', ',')}" title="Ex.: 24 se 1 pacote tem 24 unidades vendáveis" /></td>
+            <td class="num"><strong>${Number(quantidadeEstoque || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</strong><br><span class="muted">${htmlEscape(getProductUnit(produto) || item.unidadeVenda || "un")}</span></td>
             <td class="num">${brl(item.custoTotal || 0)}</td>
-            <td class="num">${brl(item.custoUnitario || 0)}</td>
+            <td class="num">${brl(custoUnitarioEstoque)}</td>
             <td>
               <select class="preview-produto-select" data-index="${idx}">
                 ${productOptions(item.produtoId)}
@@ -1714,11 +1975,13 @@
           <thead>
             <tr>
               <th>Produto na nota</th>
-              <th class="num">Qtd</th>
+              <th>Qtd nota</th>
+              <th>Itens/emb.</th>
+              <th class="num">Qtd estoque</th>
               <th class="num">Custo total</th>
-              <th class="num">Custo unit.</th>
+              <th class="num">Custo un. estoque</th>
               <th>Produto no sistema</th>
-              <th>Preço venda</th>
+              <th>Preço venda un.</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -1740,8 +2003,14 @@
           nota.itens[idx].produtoId = "";
           nota.itens[idx].status = "pendente";
         } else {
+          const previous = nota.itens[idx].produtoId;
           nota.itens[idx].produtoId = sel.value;
           nota.itens[idx].status = "atribuido";
+          const produto = productById(sel.value);
+          if (produto && previous !== sel.value && getItemFactor(nota.itens[idx]) <= 1) {
+            nota.itens[idx].fatorConversao = getProductDefaultFactor(produto);
+            nota.itens[idx].unidadeVenda = getProductUnit(produto);
+          }
         }
       });
       document.querySelectorAll(".preview-novo-nome").forEach(input => {
@@ -1750,8 +2019,23 @@
       document.querySelectorAll(".preview-nova-categoria").forEach(input => {
         nota.itens[Number(input.dataset.index)].produtoCategoriaNova = input.value;
       });
+      document.querySelectorAll(".preview-qtd-compra").forEach(input => {
+        const idx = Number(input.dataset.index);
+        nota.itens[idx].quantidadeCompra = toNumber(input.value);
+      });
+      document.querySelectorAll(".preview-fator-conversao").forEach(input => {
+        const idx = Number(input.dataset.index);
+        nota.itens[idx].fatorConversao = toNumber(input.value) || 1;
+      });
       document.querySelectorAll(".preview-preco-venda").forEach(input => {
         nota.itens[Number(input.dataset.index)].precoVenda = toNumber(input.value);
+      });
+
+      nota.itens.forEach(item => {
+        const qtdCompra = getItemPurchaseQty(item);
+        const fator = getItemFactor(item);
+        item.quantidade = stockQtyFromPurchase(qtdCompra, fator);
+        item.custoUnitario = item.quantidade > 0 ? Number(item.custoTotal || 0) / item.quantidade : 0;
       });
     }
 
@@ -1761,7 +2045,7 @@
       if (!nota) return;
       if (!nota.itens.length) return showToast("A nota não tem itens.");
 
-      const invalid = nota.itens.find(i => (!i.produtoId && !String(i.produtoNomeNovo || "").trim()) || Number(i.precoVenda || 0) <= 0);
+      const invalid = nota.itens.find(i => (!i.produtoId && !String(i.produtoNomeNovo || "").trim()) || Number(i.precoVenda || 0) <= 0 || Number(i.quantidade || 0) <= 0 || getItemFactor(i) <= 0);
       if (invalid) {
         showToast("Resolva todos os produtos pendentes e informe preço de venda para todos os itens.");
         return;
@@ -1812,6 +2096,8 @@
                 categoria: item.produtoCategoriaNova || "",
                 precoVendaPadrao: Number(item.precoVenda || 0),
                 estoqueMinimo: 0,
+                unidadeVenda: item.unidadeVenda || "un",
+                fatorCompraPadrao: getItemFactor(item),
                 ativo: true,
                 criadoEm: serverTimestamp(),
                 atualizadoEm: serverTimestamp()
@@ -1824,6 +2110,7 @@
                   produtoNome,
                   dataInicio: nota.data || today(),
                   precoVenda: Number(item.precoVenda || 0),
+                  noteId: notaRef.id,
                   origem: "cadastro_importacao_nota",
                   observacao: `Preço informado na nota ${nota.numeroNota || ""}`,
                   criadoEm: serverTimestamp()
@@ -1834,10 +2121,14 @@
             const produtoRef = doc(db, "produtos", produtoId);
             const precoAnterior = Number(productById(produtoId)?.precoVendaPadrao || 0);
             const precoNovo = Number(item.precoVenda || 0);
-            batch.update(produtoRef, {
+            const produtoAtual = productById(produtoId);
+            const updateProduto = {
               precoVendaPadrao: precoNovo,
               atualizadoEm: serverTimestamp()
-            });
+            };
+            if (!produtoAtual?.unidadeVenda) updateProduto.unidadeVenda = item.unidadeVenda || "un";
+            if (getItemFactor(item) > 1 || getProductDefaultFactor(produtoAtual) <= 1) updateProduto.fatorCompraPadrao = getItemFactor(item);
+            batch.update(produtoRef, updateProduto);
             const precoKey = `${produtoId}|${nota.data || today()}|${precoNovo}`;
             if (Math.abs(precoNovo - precoAnterior) > 0.0001 && !precosGerados.has(precoKey)) {
               precosGerados.add(precoKey);
@@ -1846,6 +2137,7 @@
                 produtoNome,
                 dataInicio: nota.data || today(),
                 precoVenda: precoNovo,
+                noteId: notaRef.id,
                 origem: "importacao_nota",
                 observacao: `Preço atualizado na nota ${nota.numeroNota || ""}`,
                 criadoEm: serverTimestamp()
@@ -1866,7 +2158,11 @@
             descricaoOriginal: item.descricaoOriginal,
             descricaoNormalizada: item.descricaoNormalizada,
             codigo: item.codigo || "",
+            quantidadeCompra: getItemPurchaseQty(item),
+            fatorConversao: getItemFactor(item),
             quantidade: Number(item.quantidade || 0),
+            unidadeCompra: item.unidadeCompra || "emb.",
+            unidadeVenda: item.unidadeVenda || getProductUnit(productById(produtoId)) || "un",
             custoTotal: Number(item.custoTotal || 0),
             custoUnitario,
             precoVenda: Number(item.precoVenda || 0),
@@ -1881,6 +2177,8 @@
             produtoId,
             produtoNome,
             dataCompra: nota.data || today(),
+            quantidadeCompra: getItemPurchaseQty(item),
+            fatorConversao: getItemFactor(item),
             quantidadeInicial: Number(item.quantidade || 0),
             quantidadeAtual: Number(item.quantidade || 0),
             custoTotal: Number(item.custoTotal || 0),
@@ -1932,34 +2230,44 @@
       }
 
       const data = $("contagemData").value || today();
+      const ultimaContagem = latestCountDate();
+      if (ultimaContagem !== "0000-00-00" && dateKey(data) < ultimaContagem) {
+        showToast(`Essa contagem é anterior à última contagem salva (${formatDate(ultimaContagem)}). Para manter a linha do tempo correta, lance uma data igual ou posterior.`);
+        return;
+      }
+
       const observacao = $("contagemObs").value || "";
       const itens = [];
       let faturamentoTotal = 0;
       let custoTotal = 0;
       let lucroTotal = 0;
       let ajustesPositivos = 0;
+      let lucroRevertidoTotal = 0;
+      let faturamentoRevertidoTotal = 0;
+      let custoRevertidoTotal = 0;
 
       const batch = writeBatch(db);
       const contagemRef = doc(collection(db, "contagensEstoque"));
 
       try {
-        setStatus("Calculando baixa de estoque...", "");
+        setStatus("Calculando baixa de estoque na data informada...", "");
         for (const entry of filled) {
           const produto = productById(entry.produtoId);
           if (!produto) continue;
-          const estoqueAtual = getStockByProductId(entry.produtoId);
+          const estoqueReferencia = getExpectedStockForCount(entry.produtoId, data);
+          const estoqueAtualHoje = getStockByProductId(entry.produtoId);
           const novoEstoque = Number(entry.novoEstoque || 0);
-          const diferenca = estoqueAtual - novoEstoque;
+          const diferenca = estoqueReferencia - novoEstoque;
 
-          if (diferenca > 0) {
+          if (diferenca > 0.0001) {
             const vendaQtd = diferenca;
             const precoVenda = getSalePriceForProduct(produto.id, data);
             const faturamento = vendaQtd * precoVenda;
             let restante = vendaQtd;
             let custo = 0;
             const lotesProduto = state.lotes
-              .filter(l => l.produtoId === entry.produtoId && Number(l.quantidadeAtual || 0) > 0)
-              .sort((a, b) => String(a.dataCompra || "").localeCompare(String(b.dataCompra || "")) || String(a.id).localeCompare(String(b.id)));
+              .filter(l => l.produtoId === entry.produtoId && Number(l.quantidadeAtual || 0) > 0 && isDateOnOrBefore(l.dataCompra || l.data, data))
+              .sort((a, b) => dateKey(a.dataCompra || a.data).localeCompare(dateKey(b.dataCompra || b.data)) || String(a.id).localeCompare(String(b.id)));
 
             for (const lote of lotesProduto) {
               if (restante <= 0) break;
@@ -1973,16 +2281,19 @@
               });
             }
 
-            if (restante > 0.0001) throw new Error(`Estoque insuficiente para ${produto.nome}.`);
+            if (restante > 0.0001) throw new Error(`Estoque insuficiente na data ${formatDate(data)} para ${produto.nome}. Confira se existe nota anterior a essa data.`);
             const lucro = faturamento - custo;
             faturamentoTotal += faturamento;
             custoTotal += custo;
             lucroTotal += lucro;
             itens.push({
+              itemId: `${contagemRef.id}-${produto.id}-venda`,
               produtoId: produto.id,
               produtoNome: produto.nome,
               tipo: "venda_presumida",
-              estoqueAnterior: estoqueAtual,
+              dataReferencia: data,
+              estoqueAnterior: estoqueReferencia,
+              estoqueAtualHoje,
               estoqueContado: novoEstoque,
               quantidadeVendida: vendaQtd,
               precoVenda,
@@ -1990,10 +2301,15 @@
               custo,
               lucro
             });
-          } else if (diferenca < 0) {
+          } else if (diferenca < -0.0001) {
             const delta = Math.abs(diferenca);
             ajustesPositivos += delta;
-            const custoMedio = getAverageCostByProductId(entry.produtoId);
+            const plano = planPositiveStockCorrection(produto.id, delta, data);
+            const quantidadeSemReversao = Number(plano.quantidadeSemReversao || 0);
+            const custoMedioAtual = getAverageCostByProductId(entry.produtoId);
+            const custoUnitarioAjuste = plano.quantidadeRevertida > 0
+              ? ((plano.custoRevertido + (quantidadeSemReversao * custoMedioAtual)) / delta)
+              : custoMedioAtual;
             const loteRef = doc(collection(db, "lotesEstoque"));
             batch.set(loteRef, {
               notaId: null,
@@ -2003,32 +2319,53 @@
               dataCompra: data,
               quantidadeInicial: delta,
               quantidadeAtual: delta,
-              custoTotal: delta * custoMedio,
-              custoUnitario: custoMedio,
-              precoVenda: Number(produto.precoVendaPadrao || 0),
+              custoTotal: delta * custoUnitarioAjuste,
+              custoUnitario: custoUnitarioAjuste,
+              precoVenda: getSalePriceForProduct(produto.id, data),
               origem: "ajuste_positivo_contagem",
+              observacao: "Estoque contado maior que o sistema na data. Pode corrigir venda presumida anterior.",
               ativo: true,
               criadoEm: serverTimestamp(),
               atualizadoEm: serverTimestamp()
             });
+
+            faturamentoRevertidoTotal += Number(plano.faturamentoRevertido || 0);
+            custoRevertidoTotal += Number(plano.custoRevertido || 0);
+            lucroRevertidoTotal += Number(plano.lucroRevertido || 0);
+
             itens.push({
+              itemId: `${contagemRef.id}-${produto.id}-ajuste`,
               produtoId: produto.id,
               produtoNome: produto.nome,
               tipo: "ajuste_positivo",
-              estoqueAnterior: estoqueAtual,
+              dataReferencia: data,
+              estoqueAnterior: estoqueReferencia,
+              estoqueAtualHoje,
               estoqueContado: novoEstoque,
               quantidadeAjustada: delta,
-              precoVenda: Number(produto.precoVendaPadrao || 0),
+              quantidadeRevertida: plano.quantidadeRevertida,
+              quantidadeSemReversao: plano.quantidadeSemReversao,
+              reversoes: plano.reversoes,
               faturamento: 0,
               custo: 0,
-              lucro: 0
+              lucro: 0,
+              faturamentoRevertido: plano.faturamentoRevertido,
+              custoRevertido: plano.custoRevertido,
+              lucroRevertido: plano.lucroRevertido,
+              precoVenda: getSalePriceForProduct(produto.id, data),
+              observacao: plano.lucroRevertido > 0
+                ? "Ajuste positivo com estorno automático de lucro reconhecido a mais."
+                : "Ajuste positivo sem venda anterior para estornar."
             });
           } else {
             itens.push({
+              itemId: `${contagemRef.id}-${produto.id}-sem-alteracao`,
               produtoId: produto.id,
               produtoNome: produto.nome,
               tipo: "sem_alteracao",
-              estoqueAnterior: estoqueAtual,
+              dataReferencia: data,
+              estoqueAnterior: estoqueReferencia,
+              estoqueAtualHoje,
               estoqueContado: novoEstoque,
               faturamento: 0,
               custo: 0,
@@ -2044,7 +2381,11 @@
           faturamentoTotal,
           custoTotal,
           lucroTotal,
+          lucroLiquidoAjustado: lucroTotal - lucroRevertidoTotal,
           ajustesPositivos,
+          faturamentoRevertidoTotal,
+          custoRevertidoTotal,
+          lucroRevertidoTotal,
           status: "confirmada",
           criadoEm: serverTimestamp(),
           atualizadoEm: serverTimestamp()
@@ -2070,10 +2411,31 @@
           });
         }
 
+        if (lucroRevertidoTotal > 0) {
+          contasAtivas.forEach(conta => {
+            const valor = lucroRevertidoTotal * (Number(conta.percentual || 0) / 100);
+            const movRef = doc(collection(db, "movimentosDistribuicao"));
+            batch.set(movRef, {
+              tipo: "debito",
+              origem: "ajuste_lucro_estoque",
+              contagemId: contagemRef.id,
+              contaId: conta.id,
+              nomeConta: conta.nome,
+              percentualAplicado: Number(conta.percentual || 0),
+              lucroBase: lucroRevertidoTotal,
+              valor,
+              data,
+              observacao: "Estorno de lucro por estoque encontrado a mais em contagem posterior",
+              criadoEm: serverTimestamp()
+            });
+          });
+        }
+
         await batch.commit();
         $("contagemObs").value = "";
         await refreshData();
-        showToast(`Contagem salva. Lucro distribuído: ${brl(lucroTotal)}.`);
+        const msgAjuste = lucroRevertidoTotal > 0 ? ` Estorno automático: ${brl(lucroRevertidoTotal)}.` : "";
+        showToast(`Contagem salva. Lucro distribuído: ${brl(lucroTotal)}.${msgAjuste}`);
       } catch (error) {
         console.error(error);
         setStatus("Erro ao salvar contagem", "err");
@@ -2122,6 +2484,8 @@
       const categoria = $("produtoCategoria").value.trim();
       const precoVendaPadrao = toNumber($("produtoPreco").value);
       const estoqueMinimo = toNumber($("produtoEstoqueMinimo").value);
+      const unidadeVenda = $("produtoUnidadeVenda").value.trim() || "un";
+      const fatorCompraPadrao = toNumber($("produtoFatorCompraPadrao").value) || 1;
       if (!nome) return showToast("Informe o nome do produto.");
       if (precoVendaPadrao <= 0) return showToast("Informe preço de venda padrão.");
 
@@ -2132,6 +2496,8 @@
           categoria,
           precoVendaPadrao,
           estoqueMinimo,
+          unidadeVenda,
+          fatorCompraPadrao,
           ativo: true,
           criadoEm: serverTimestamp(),
           atualizadoEm: serverTimestamp()
@@ -2208,6 +2574,35 @@
       openProduto(btn.dataset.produtoId);
     }
 
+    async function deleteSelectedNota() {
+      const nota = getNotaById(state.selectedNotaId);
+      if (!nota) return showToast("Abra uma nota para excluir.");
+      const itens = state.itensNota.filter(i => i.notaId === nota.id);
+      const lotes = state.lotes.filter(l => l.notaId === nota.id);
+      const loteBaixado = lotes.find(l => Math.abs(Number(l.quantidadeAtual || 0) - Number(l.quantidadeInicial || 0)) > 0.0001);
+      if (loteBaixado) {
+        showToast("Não posso excluir essa nota porque algum lote dela já teve baixa por contagem. Nesse caso, faça um ajuste manual de estoque.");
+        return;
+      }
+      const ok = confirm(`Excluir a nota ${nota.numeroNota || nota.id}?
+
+Isso remove os itens e lotes dessa nota, desde que ainda não tenham sido baixados por contagem. Produtos e apelidos ficam cadastrados.`);
+      if (!ok) return;
+      try {
+        const batch = writeBatch(db);
+        itens.forEach(i => batch.delete(doc(db, "itensNota", i.id)));
+        lotes.forEach(l => batch.delete(doc(db, "lotesEstoque", l.id)));
+        batch.delete(doc(db, "notasCompra", nota.id));
+        await batch.commit();
+        state.selectedNotaId = "";
+        await refreshData();
+        showToast("Nota excluída e estoque revertido.");
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro ao excluir nota: ${error.message}`);
+      }
+    }
+
     async function savePrecoProduto() {
       const produto = productById(state.selectedProdutoId);
       if (!produto) return showToast("Abra um produto antes de alterar o preço.");
@@ -2242,6 +2637,28 @@
       } catch (error) {
         console.error(error);
         showToast(`Erro ao atualizar preço: ${error.message}`);
+      }
+    }
+
+    async function saveConversaoProduto() {
+      const produto = productById(state.selectedProdutoId);
+      if (!produto) return showToast("Abra um produto antes de ajustar a conversão.");
+      const unidadeVenda = $("produtoPerfilUnidadeVenda").value.trim() || "un";
+      const fatorCompraPadrao = toNumber($("produtoPerfilFatorCompra").value) || 1;
+      if (fatorCompraPadrao <= 0) return showToast("Informe um fator de conversão válido.");
+      try {
+        await updateDoc(doc(db, "produtos", produto.id), {
+          unidadeVenda,
+          fatorCompraPadrao,
+          atualizadoEm: serverTimestamp()
+        });
+        await refreshData();
+        state.selectedProdutoId = produto.id;
+        renderProdutoPerfil();
+        showToast(`Conversão salva: 1 embalagem = ${Number(fatorCompraPadrao).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ${unidadeVenda}.`);
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro ao salvar conversão: ${error.message}`);
       }
     }
 
@@ -2426,6 +2843,7 @@
       $("produtosTabela").addEventListener("click", handleProdutosClick);
       $("btnFecharProdutoPerfil").addEventListener("click", () => { state.selectedProdutoId = ""; renderProdutoPerfil(); });
       $("btnSalvarPrecoProduto").addEventListener("click", savePrecoProduto);
+      $("btnSalvarConversaoProduto").addEventListener("click", saveConversaoProduto);
       $("btnImportarBasePlanilha").addEventListener("click", importInitialSpreadsheetBase);
       $("btnCorrigirBaseInicial").addEventListener("click", resetInitialSpreadsheetBase);
       $("btnLerArquivo").addEventListener("click", handleReadFile);
@@ -2447,9 +2865,24 @@
       $("rankingCompras").addEventListener("click", handleRelatoriosClick);
       $("rankingEstoque").addEventListener("click", handleRelatoriosClick);
       $("btnFecharNotaDetalhe").addEventListener("click", () => { state.selectedNotaId = ""; renderNotaDetalhe(); });
+      $("btnExcluirNotaDetalhe").addEventListener("click", deleteSelectedNota);
 
       $("notaItensPreview").addEventListener("change", event => {
         if (event.target.classList.contains("preview-produto-select")) {
+          syncPreviewFromInputs();
+          const idx = Number(event.target.dataset.index);
+          const item = state.previewNota?.itens?.[idx];
+          const produto = productById(event.target.value);
+          if (item && produto && getItemFactor(item) <= 1) {
+            item.fatorConversao = getProductDefaultFactor(produto);
+            item.unidadeVenda = getProductUnit(produto);
+            item.quantidade = stockQtyFromPurchase(getItemPurchaseQty(item), getItemFactor(item));
+            item.custoUnitario = item.quantidade > 0 ? Number(item.custoTotal || 0) / item.quantidade : 0;
+          }
+          renderNotaPreview();
+          return;
+        }
+        if (event.target.classList.contains("preview-fator-conversao") || event.target.classList.contains("preview-qtd-compra")) {
           syncPreviewFromInputs();
           renderNotaPreview();
         }
