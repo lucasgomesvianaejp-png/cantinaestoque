@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cantina Estoque V7</title>
+  <title>Cantina Estoque V8</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -1547,18 +1547,25 @@
         [false, false, false, true, true, false]
       ) : `<div class="empty">Nenhuma nota importada ainda.</div>`;
 
+      const latestDate = latestCountDate();
       $("historicoContagens").innerHTML = state.contagens.length ? renderTable(
-        ["Data", "Faturamento", "Custo", "Lucro bruto", "Estorno", "Lucro líquido", "Obs."],
-        state.contagens.slice(0, 80).map(c => [
-          formatDate(c.data),
-          brl(c.faturamentoTotal || 0),
-          brl(c.custoTotal || 0),
-          `<strong>${brl(c.lucroTotal || 0)}</strong>`,
-          Number(c.lucroRevertidoTotal || 0) > 0 ? `<span class="danger-text">-${brl(c.lucroRevertidoTotal || 0)}</span>` : brl(0),
-          `<strong>${brl(Number(c.lucroTotal || 0) - Number(c.lucroRevertidoTotal || 0))}</strong>`,
-          htmlEscape(c.observacao || "-")
-        ]),
-        [false, true, true, true, true, true, false]
+        ["Data", "Faturamento", "Custo", "Lucro bruto", "Estorno", "Lucro líquido", "Obs.", "Ação"],
+        state.contagens.slice(0, 80).map(c => {
+          const canCancel = dateKey(c.data) === latestDate;
+          return [
+            formatDate(c.data),
+            brl(c.faturamentoTotal || 0),
+            brl(c.custoTotal || 0),
+            `<strong>${brl(c.lucroTotal || 0)}</strong>`,
+            Number(c.lucroRevertidoTotal || 0) > 0 ? `<span class="danger-text">-${brl(c.lucroRevertidoTotal || 0)}</span>` : brl(0),
+            `<strong>${brl(Number(c.lucroTotal || 0) - Number(c.lucroRevertidoTotal || 0))}</strong>`,
+            htmlEscape(c.observacao || "-"),
+            canCancel
+              ? `<button class="danger cancelar-contagem" data-contagem-id="${c.id}" type="button">Cancelar</button>`
+              : `<span class="muted">Bloqueada</span>`
+          ];
+        }),
+        [false, true, true, true, true, true, false, false]
       ) : `<div class="empty">Nenhuma atualização de estoque ainda.</div>`;
     }
 
@@ -1801,7 +1808,7 @@
       const nota = getNotaById(state.selectedNotaId);
       if (!nota) return showToast("Abra uma nota para editar.");
       if (notaTemBaixa(nota.id)) {
-        showToast("Essa nota já teve baixa por contagem. Para não bagunçar lucro e FIFO, a edição direta fica bloqueada. Use ajuste de estoque ou me peça um fluxo de correção pós-baixa.");
+        showToast("Essa nota já teve baixa por contagem. Cancele a contagem mais recente no Histórico, corrija a nota e lance a contagem de novo.");
         return;
       }
       state.editingNotaId = nota.id;
@@ -2598,6 +2605,7 @@ Isso recalcula as quantidades em estoque e os custos dos lotes dessa nota. Só �
               custoUnitario: custoUnitarioAjuste,
               precoVenda: getSalePriceForProduct(produto.id, data),
               origem: "ajuste_positivo_contagem",
+              contagemId: contagemRef.id,
               observacao: "Estoque contado maior que o sistema na data. Pode corrigir venda presumida anterior.",
               ativo: true,
               criadoEm: serverTimestamp(),
@@ -2847,6 +2855,121 @@ Isso recalcula as quantidades em estoque e os custos dos lotes dessa nota. Só �
       if (!btn) return;
       setView("produtos");
       openProduto(btn.dataset.produtoId);
+    }
+
+    function getLatestContagem() {
+      return [...state.contagens].sort((a, b) => {
+        const byDate = dateKey(b.data).localeCompare(dateKey(a.data));
+        if (byDate) return byDate;
+        return String(b.id).localeCompare(String(a.id));
+      })[0] || null;
+    }
+
+    function identifyAdjustmentLotsForContagem(contagem) {
+      const ids = new Set();
+      if (!contagem) return ids;
+      const ajusteItems = (contagem.itens || []).filter(i => i.tipo === "ajuste_positivo");
+      state.lotes.forEach(lote => {
+        if (lote.origem !== "ajuste_positivo_contagem") return;
+        if (lote.contagemId && lote.contagemId === contagem.id) {
+          ids.add(lote.id);
+          return;
+        }
+        if (lote.contagemId) return;
+        const dataOk = dateKey(lote.dataCompra || lote.data) === dateKey(contagem.data);
+        const notaOk = !lote.notaId;
+        const itemMatch = ajusteItems.find(item =>
+          item.produtoId === lote.produtoId &&
+          Math.abs(Number(item.quantidadeAjustada || 0) - Number(lote.quantidadeInicial || 0)) < 0.0001
+        );
+        if (dataOk && notaOk && itemMatch) ids.add(lote.id);
+      });
+      return ids;
+    }
+
+    function replayStockWithoutContagem(contagemId, adjustmentLotIdsToDelete = new Set()) {
+      const lotesLocal = state.lotes
+        .filter(l => !adjustmentLotIdsToDelete.has(l.id))
+        .map(l => ({ ...l, quantidadeAtualNova: Number(l.quantidadeInicial || 0) }));
+
+      const contagens = state.contagens
+        .filter(c => c.id !== contagemId)
+        .sort((a, b) => dateKey(a.data).localeCompare(dateKey(b.data)) || String(a.id).localeCompare(String(b.id)));
+
+      for (const contagem of contagens) {
+        for (const item of (contagem.itens || [])) {
+          if (item.tipo !== "venda_presumida") continue;
+          let restante = Number(item.quantidadeVendida || 0);
+          const candidatos = lotesLocal
+            .filter(l => l.produtoId === item.produtoId && Number(l.quantidadeAtualNova || 0) > 0 && isDateOnOrBefore(l.dataCompra || l.data, contagem.data))
+            .sort((a, b) => dateKey(a.dataCompra || a.data).localeCompare(dateKey(b.dataCompra || b.data)) || String(a.id).localeCompare(String(b.id)));
+          for (const lote of candidatos) {
+            if (restante <= 0.0001) break;
+            const baixa = Math.min(restante, Number(lote.quantidadeAtualNova || 0));
+            lote.quantidadeAtualNova = Number(lote.quantidadeAtualNova || 0) - baixa;
+            restante -= baixa;
+          }
+        }
+      }
+      return lotesLocal;
+    }
+
+    async function cancelContagem(contagemId) {
+      const contagem = state.contagens.find(c => c.id === contagemId);
+      if (!contagem) return showToast("Contagem não encontrada.");
+      const latestDate = latestCountDate();
+      if (dateKey(contagem.data) < latestDate) {
+        showToast(`Só dá para cancelar contagens da última data (${formatDate(latestDate)}). Cancele da mais recente para a mais antiga.`);
+        return;
+      }
+
+      const ok = confirm(`Cancelar a contagem de ${formatDate(contagem.data)}?
+
+Isso estorna a atualização de estoque, remove os créditos/débitos de lucro gerados por essa contagem e recalcula o estoque com as contagens anteriores. Depois disso, você poderá editar a nota, se ela não estiver ligada a outra contagem.`);
+      if (!ok) return;
+
+      try {
+        setStatus("Cancelando contagem e recalculando estoque...", "");
+        const adjustmentIds = identifyAdjustmentLotsForContagem(contagem);
+        const lotesRecalculados = replayStockWithoutContagem(contagemId, adjustmentIds);
+        const movimentosDaContagem = state.movimentos.filter(m => m.contagemId === contagemId);
+
+        const writes = [];
+        const pushUpdate = (ref, data) => writes.push({ type: "update", ref, data });
+        const pushDelete = (ref) => writes.push({ type: "delete", ref });
+
+        lotesRecalculados.forEach(lote => {
+          pushUpdate(doc(db, "lotesEstoque", lote.id), {
+            quantidadeAtual: Number(lote.quantidadeAtualNova || 0),
+            atualizadoEm: serverTimestamp()
+          });
+        });
+        adjustmentIds.forEach(id => pushDelete(doc(db, "lotesEstoque", id)));
+        movimentosDaContagem.forEach(m => pushDelete(doc(db, "movimentosDistribuicao", m.id)));
+        pushDelete(doc(db, "contagensEstoque", contagemId));
+
+        for (let i = 0; i < writes.length; i += 450) {
+          const batch = writeBatch(db);
+          writes.slice(i, i + 450).forEach(w => {
+            if (w.type === "delete") batch.delete(w.ref);
+            else batch.update(w.ref, w.data);
+          });
+          await batch.commit();
+        }
+
+        await refreshData();
+        showToast("Contagem cancelada. Estoque e distribuição foram recalculados.");
+      } catch (error) {
+        console.error(error);
+        setStatus("Erro ao cancelar contagem", "err");
+        showToast(`Erro ao cancelar contagem: ${error.message}`);
+      }
+    }
+
+    function handleHistoricoContagensClick(event) {
+      const btn = event.target.closest(".cancelar-contagem");
+      if (!btn) return;
+      cancelContagem(btn.dataset.contagemId);
     }
 
     async function deleteSelectedNota() {
@@ -3134,6 +3257,7 @@ Isso remove os itens e lotes dessa nota, desde que ainda não tenham sido baixad
       $("contaForm").addEventListener("submit", saveConta);
       $("contasTabela").addEventListener("click", handleConfigClick);
       $("historicoNotas").addEventListener("click", handleHistoricoNotasClick);
+      $("historicoContagens").addEventListener("click", handleHistoricoContagensClick);
       $("notaDetalheItens").addEventListener("click", handleHistoricoNotasClick);
       $("rankingLucro").addEventListener("click", handleRelatoriosClick);
       $("rankingVendas").addEventListener("click", handleRelatoriosClick);
