@@ -1,32 +1,31 @@
-# Cantina Estoque - V1
+# Cantina Estoque - Piaget V2
 
-Sistema simples em HTML único para controle de estoque da cantina com Firebase Firestore.
+Sistema web simples em HTML único, conectado ao Firebase/Firestore.
 
-## Arquivos
+## O que mudou nesta versão
 
-- `index.html`: aplicação completa.
+- Inclui botão **Importar base inicial da planilha**.
+- A base inicial importa somente produtos/lotes com estoque atual maior que zero.
+- Itens com estoque zerado não entram no estoque.
+- Alguns nomes antigos da planilha entram apenas como apelidos quando o produto ativo é evidente.
+- A importação inicial não gera lucro e não cria saldo de distribuição. Ela apenas carrega estoque.
 
-## Como subir no GitHub
+## Base inicial extraída da planilha
 
-1. Crie o repositório no GitHub.
-2. Envie o arquivo `index.html` para a raiz do repositório.
-3. Faça o deploy pela Vercel selecionando esse repositório.
+- Produtos ativos: 26
+- Lotes com estoque: 56
+- Valor em estoque pelo custo: R$ 2.281,85
+- Lucro potencial estimado, se vender tudo pelos preços cadastrados: R$ 1.390,65
 
-## Firebase necessário
+## Como usar
 
-Ative somente:
+1. Suba o `index.html` para o GitHub.
+2. Publique pela Vercel.
+3. Abra o sistema.
+4. Vá em **Importar Nota**.
+5. Clique em **Importar base inicial da planilha**.
+6. Depois disso, use normalmente: importar novas notas, atualizar estoque contado, gerar lucro e sacar por conta.
 
-- Firestore Database
+## Observação
 
-Para testar rapidamente, use regras temporárias de leitura/escrita abertas. Depois, quando o sistema estiver pronto, adicione autenticação e regras fechadas.
-
-## Fluxo do sistema
-
-1. Cadastrar produtos ou importar uma nota.
-2. Importar XML/JSON da nota.
-3. Conferir os produtos antes de lançar no estoque.
-4. Associar produto da nota com produto do sistema.
-5. Confirmar entrada no estoque.
-6. Atualizar estoque contado.
-7. O sistema calcula a baixa, o lucro e distribui automaticamente.
-8. Registrar saques/pagamentos por conta: Lucas, Giro/Caixa, Escola, Juan e Dona Francisca.
+A importação inicial tem proteção contra duplicidade: se a nota `BASE-INICIAL-PLANILHA` já existir no Firestore, o sistema não importa novamente.
