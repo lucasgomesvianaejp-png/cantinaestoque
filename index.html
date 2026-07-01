@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cantina Estoque V6</title>
+  <title>Cantina Estoque V7</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -821,12 +821,14 @@
           <div class="section-title">
             <h3 id="notaDetalheTitulo">Detalhe da nota</h3>
             <div class="actions">
+              <button id="btnEditarNotaDetalhe" class="secondary" type="button">Editar itens</button>
               <button id="btnExcluirNotaDetalhe" class="danger" type="button">Excluir nota sem baixa</button>
               <button id="btnFecharNotaDetalhe" class="ghost" type="button">Fechar</button>
             </div>
           </div>
           <div id="notaDetalheResumo" class="grid cards" style="margin-bottom:16px;"></div>
           <div id="notaDetalheItens" class="table-wrap"></div>
+          <div id="notaEdicaoCard" class="card-soft" style="display:none; margin-top:16px;"></div>
         </div>
       </section>
 
@@ -914,6 +916,7 @@
       notas: [],
       contagens: [],
       itensNota: [],
+      editingNotaId: "",
       precos: [],
       aliases: new Map(),
       previewNota: null,
@@ -1743,6 +1746,13 @@
         return;
       }
       card.style.display = "block";
+      if (state.editingNotaId && state.editingNotaId !== nota.id) cancelEditNota();
+      const editBtn = $("btnEditarNotaDetalhe");
+      if (editBtn) {
+        editBtn.disabled = notaTemBaixa(nota.id);
+        editBtn.textContent = notaTemBaixa(nota.id) ? "Edição bloqueada" : "Editar itens";
+        editBtn.title = notaTemBaixa(nota.id) ? "Essa nota já teve baixa por contagem. Faça ajuste de estoque para corrigir." : "Editar itens da nota antes de qualquer baixa.";
+      }
       const itens = state.itensNota.filter(i => i.notaId === nota.id);
       const qtdTotal = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
       const custoTotal = itens.reduce((s, i) => s + Number(i.custoTotal || 0), 0);
@@ -1768,6 +1778,271 @@
         ]),
         [false, false, false, true, true, true, true, true, true]
       ) : `<div class="empty">Nenhum item encontrado para esta nota.</div>`;
+    }
+
+
+
+    function notaTemBaixa(notaId) {
+      const lotes = state.lotes.filter(l => l.notaId === notaId);
+      return lotes.some(l => Math.abs(Number(l.quantidadeAtual || 0) - Number(l.quantidadeInicial || 0)) > 0.0001);
+    }
+
+    function findLoteForItem(item) {
+      if (!item) return null;
+      let lote = state.lotes.find(l => l.itemNotaId && l.itemNotaId === item.id);
+      if (lote) return lote;
+      const candidatos = state.lotes.filter(l => l.notaId === item.notaId && l.produtoId === item.produtoId);
+      if (candidatos.length === 1) return candidatos[0];
+      lote = candidatos.find(l => Math.abs(Number(l.quantidadeInicial || 0) - Number(item.quantidade || 0)) < 0.0001 && Math.abs(Number(l.custoTotal || 0) - Number(item.custoTotal || 0)) < 0.01);
+      return lote || null;
+    }
+
+    function startEditNota() {
+      const nota = getNotaById(state.selectedNotaId);
+      if (!nota) return showToast("Abra uma nota para editar.");
+      if (notaTemBaixa(nota.id)) {
+        showToast("Essa nota já teve baixa por contagem. Para não bagunçar lucro e FIFO, a edição direta fica bloqueada. Use ajuste de estoque ou me peça um fluxo de correção pós-baixa.");
+        return;
+      }
+      state.editingNotaId = nota.id;
+      renderNotaEditForm();
+    }
+
+    function cancelEditNota() {
+      state.editingNotaId = "";
+      const box = $("notaEdicaoCard");
+      if (box) {
+        box.style.display = "none";
+        box.innerHTML = "";
+      }
+    }
+
+    function renderNotaEditForm() {
+      const box = $("notaEdicaoCard");
+      const nota = getNotaById(state.editingNotaId);
+      if (!box || !nota) return;
+      const itens = state.itensNota.filter(i => i.notaId === nota.id);
+      const rows = itens.map((i, idx) => {
+        const produto = productById(i.produtoId);
+        const qtdCompra = getItemPurchaseQty(i);
+        const fator = getItemFactor(i);
+        const qtdEstoque = stockQtyFromPurchase(qtdCompra, fator);
+        const custoUnit = qtdEstoque > 0 ? Number(i.custoTotal || 0) / qtdEstoque : 0;
+        return `
+          <tr data-item-id="${i.id}">
+            <td>
+              <strong>${htmlEscape(i.descricaoOriginal || "-")}</strong><br>
+              <span class="muted">${htmlEscape(i.codigo || "sem código")}</span>
+            </td>
+            <td>
+              <select class="edit-nota-produto" data-index="${idx}" data-item-id="${i.id}">${productOptions(i.produtoId)}</select>
+            </td>
+            <td><input class="edit-nota-qtd-compra" data-index="${idx}" data-item-id="${i.id}" inputmode="decimal" value="${String(qtdCompra || 0).replace('.', ',')}" /></td>
+            <td><input class="edit-nota-fator" data-index="${idx}" data-item-id="${i.id}" inputmode="decimal" value="${String(fator || 1).replace('.', ',')}" /></td>
+            <td class="num edit-nota-qtd-estoque" data-index="${idx}"><strong>${Number(qtdEstoque || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</strong><br><span class="muted">${htmlEscape(getProductUnit(produto))}</span></td>
+            <td><input class="edit-nota-custo" data-index="${idx}" data-item-id="${i.id}" inputmode="decimal" value="${String(Number(i.custoTotal || 0).toFixed(2)).replace('.', ',')}" /></td>
+            <td class="num edit-nota-custo-unit" data-index="${idx}">${brl(custoUnit)}</td>
+            <td><input class="edit-nota-preco" data-index="${idx}" data-item-id="${i.id}" inputmode="decimal" value="${String(Number(i.precoVenda || produto?.precoVendaPadrao || 0)).replace('.', ',')}" /></td>
+          </tr>`;
+      }).join("");
+      box.style.display = "block";
+      box.innerHTML = `
+        <div class="section-title">
+          <h3>Editar nota importada</h3>
+          <small>Use para corrigir subunidades, custo, produto associado e preço antes de qualquer baixa.</small>
+        </div>
+        <div class="notice" style="margin-bottom:14px;">
+          Essa edição só é permitida enquanto nenhum lote dessa nota tiver sido baixado por contagem. Para o pirulito, por exemplo, use: <strong>qtd nota = 3</strong> e <strong>itens/emb. = 24</strong>, gerando <strong>72 unidades vendáveis</strong>.
+        </div>
+        <div class="form-grid four" style="margin-bottom:14px;">
+          <div><label>Data</label><input id="editNotaData" type="date" value="${htmlEscape(nota.data || today())}" /></div>
+          <div><label>Fornecedor</label><input id="editNotaFornecedor" value="${htmlEscape(nota.fornecedor || "")}" /></div>
+          <div><label>Número da nota</label><input id="editNotaNumero" value="${htmlEscape(nota.numeroNota || "")}" /></div>
+          <div><label>Valor total</label><input id="editNotaValorTotal" inputmode="decimal" value="${String(Number(nota.valorTotal || 0).toFixed(2)).replace('.', ',')}" /></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Item da nota</th>
+                <th>Produto no sistema</th>
+                <th>Qtd nota</th>
+                <th>Itens/emb.</th>
+                <th class="num">Qtd estoque</th>
+                <th>Custo total</th>
+                <th class="num">Custo un.</th>
+                <th>Venda un.</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div class="actions" style="margin-top:14px;">
+          <button id="btnSalvarEdicaoNota" class="primary" type="button">Salvar correção da nota</button>
+          <button id="btnCancelarEdicaoNota" class="secondary" type="button">Cancelar edição</button>
+        </div>`;
+      $("btnSalvarEdicaoNota")?.addEventListener("click", saveNotaEdits);
+      $("btnCancelarEdicaoNota")?.addEventListener("click", cancelEditNota);
+      box.querySelectorAll(".edit-nota-qtd-compra, .edit-nota-fator, .edit-nota-custo, .edit-nota-produto").forEach(el => {
+        el.addEventListener("input", recalcNotaEditRows);
+        el.addEventListener("change", recalcNotaEditRows);
+      });
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function recalcNotaEditRows() {
+      const box = $("notaEdicaoCard");
+      if (!box) return;
+      box.querySelectorAll("tr[data-item-id]").forEach(tr => {
+        const idx = tr.querySelector(".edit-nota-qtd-compra")?.dataset.index;
+        const qtd = toNumber(tr.querySelector(".edit-nota-qtd-compra")?.value);
+        const fator = toNumber(tr.querySelector(".edit-nota-fator")?.value) || 1;
+        const custo = toNumber(tr.querySelector(".edit-nota-custo")?.value);
+        const produto = productById(tr.querySelector(".edit-nota-produto")?.value);
+        const qtdEstoque = stockQtyFromPurchase(qtd, fator);
+        const custoUnit = qtdEstoque > 0 ? custo / qtdEstoque : 0;
+        const qtdCell = tr.querySelector(`.edit-nota-qtd-estoque[data-index="${idx}"]`);
+        const custoCell = tr.querySelector(`.edit-nota-custo-unit[data-index="${idx}"]`);
+        if (qtdCell) qtdCell.innerHTML = `<strong>${Number(qtdEstoque || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</strong><br><span class="muted">${htmlEscape(getProductUnit(produto))}</span>`;
+        if (custoCell) custoCell.textContent = brl(custoUnit);
+      });
+    }
+
+    async function saveNotaEdits() {
+      const nota = getNotaById(state.editingNotaId || state.selectedNotaId);
+      if (!nota) return showToast("Abra uma nota para editar.");
+      if (notaTemBaixa(nota.id)) {
+        showToast("Essa nota já teve baixa por contagem. A edição direta foi bloqueada para preservar o lucro já apurado.");
+        return;
+      }
+      const rows = Array.from(document.querySelectorAll("#notaEdicaoCard tr[data-item-id]"));
+      if (!rows.length) return showToast("Nenhum item para editar.");
+      const data = $("editNotaData")?.value || nota.data || today();
+      const fornecedor = $("editNotaFornecedor")?.value || nota.fornecedor || "Fornecedor não informado";
+      const numeroNota = $("editNotaNumero")?.value || nota.numeroNota || "";
+      let valorTotalInformado = toNumber($("editNotaValorTotal")?.value);
+      const updates = [];
+      let somaCustos = 0;
+
+      for (const tr of rows) {
+        const itemId = tr.dataset.itemId;
+        const item = state.itensNota.find(i => i.id === itemId);
+        if (!item) continue;
+        const produtoId = tr.querySelector(".edit-nota-produto")?.value || "";
+        const produto = productById(produtoId);
+        const quantidadeCompra = toNumber(tr.querySelector(".edit-nota-qtd-compra")?.value);
+        const fatorConversao = toNumber(tr.querySelector(".edit-nota-fator")?.value) || 1;
+        const quantidade = stockQtyFromPurchase(quantidadeCompra, fatorConversao);
+        const custoTotal = toNumber(tr.querySelector(".edit-nota-custo")?.value);
+        const precoVenda = toNumber(tr.querySelector(".edit-nota-preco")?.value);
+        if (!produto) return showToast("Todos os itens precisam estar associados a um produto existente.");
+        if (quantidadeCompra <= 0 || fatorConversao <= 0 || quantidade <= 0) return showToast(`Quantidade inválida em ${item.descricaoOriginal || produto.nome}.`);
+        if (custoTotal <= 0) return showToast(`Custo total inválido em ${item.descricaoOriginal || produto.nome}.`);
+        if (precoVenda <= 0) return showToast(`Preço de venda inválido em ${item.descricaoOriginal || produto.nome}.`);
+        const lote = findLoteForItem(item);
+        if (!lote) return showToast(`Não encontrei o lote correspondente ao item ${item.descricaoOriginal || produto.nome}.`);
+        if (Math.abs(Number(lote.quantidadeAtual || 0) - Number(lote.quantidadeInicial || 0)) > 0.0001) {
+          return showToast(`O lote de ${produto.nome} já teve baixa. A edição direta foi bloqueada.`);
+        }
+        const custoUnitario = custoTotal / quantidade;
+        somaCustos += custoTotal;
+        updates.push({ item, lote, produto, produtoId, quantidadeCompra, fatorConversao, quantidade, custoTotal, custoUnitario, precoVenda });
+      }
+
+      if (!valorTotalInformado || valorTotalInformado <= 0) valorTotalInformado = somaCustos;
+      const ok = confirm(`Salvar correção da nota ${numeroNota || nota.id}?
+
+Isso recalcula as quantidades em estoque e os custos dos lotes dessa nota. Só é seguro porque nenhum lote dela teve baixa.`);
+      if (!ok) return;
+
+      try {
+        setStatus("Salvando correção da nota...", "");
+        const batch = writeBatch(db);
+        batch.update(doc(db, "notasCompra", nota.id), {
+          data,
+          fornecedor,
+          numeroNota,
+          valorTotal: valorTotalInformado,
+          totalItens: updates.length,
+          atualizadoEm: serverTimestamp()
+        });
+
+        const produtoUpdates = new Set();
+        const precoKeys = new Set();
+        for (const u of updates) {
+          batch.update(doc(db, "itensNota", u.item.id), {
+            produtoId: u.produtoId,
+            produtoNome: u.produto.nome,
+            quantidadeCompra: u.quantidadeCompra,
+            fatorConversao: u.fatorConversao,
+            quantidade: u.quantidade,
+            unidadeCompra: u.item.unidadeCompra || "emb.",
+            unidadeVenda: getProductUnit(u.produto),
+            custoTotal: u.custoTotal,
+            custoUnitario: u.custoUnitario,
+            precoVenda: u.precoVenda,
+            data,
+            fornecedor
+          });
+          batch.update(doc(db, "lotesEstoque", u.lote.id), {
+            notaId: nota.id,
+            itemNotaId: u.item.id,
+            produtoId: u.produtoId,
+            produtoNome: u.produto.nome,
+            dataCompra: data,
+            quantidadeCompra: u.quantidadeCompra,
+            fatorConversao: u.fatorConversao,
+            quantidadeInicial: u.quantidade,
+            quantidadeAtual: u.quantidade,
+            custoTotal: u.custoTotal,
+            custoUnitario: u.custoUnitario,
+            precoVenda: u.precoVenda,
+            atualizadoEm: serverTimestamp()
+          });
+          if (!produtoUpdates.has(u.produtoId)) {
+            produtoUpdates.add(u.produtoId);
+            batch.update(doc(db, "produtos", u.produtoId), {
+              precoVendaPadrao: u.precoVenda,
+              fatorCompraPadrao: u.fatorConversao,
+              unidadeVenda: getProductUnit(u.produto),
+              atualizadoEm: serverTimestamp()
+            });
+          }
+          const precoKey = `${u.produtoId}|${data}|${u.precoVenda}|edicao`;
+          if (!precoKeys.has(precoKey)) {
+            precoKeys.add(precoKey);
+            batch.set(doc(collection(db, "historicoPrecos")), {
+              produtoId: u.produtoId,
+              produtoNome: u.produto.nome,
+              dataInicio: data,
+              precoVenda: u.precoVenda,
+              noteId: nota.id,
+              origem: "edicao_nota",
+              observacao: `Preço confirmado na edição da nota ${numeroNota || ""}`,
+              criadoEm: serverTimestamp()
+            });
+          }
+          const aliasId = docSafeId(u.item.descricaoNormalizada || normalizeText(u.item.descricaoOriginal || u.produto.nome));
+          batch.set(doc(db, "aliasesProdutos", aliasId), {
+            descricaoOriginal: u.item.descricaoOriginal || u.produto.nome,
+            descricaoNormalizada: u.item.descricaoNormalizada || normalizeText(u.item.descricaoOriginal || u.produto.nome),
+            produtoId: u.produtoId,
+            produtoNome: u.produto.nome,
+            fornecedor,
+            atualizadoEm: serverTimestamp()
+          }, { merge: true });
+        }
+        await batch.commit();
+        state.editingNotaId = "";
+        await refreshData();
+        state.selectedNotaId = nota.id;
+        renderNotaDetalhe();
+        showToast("Nota corrigida com sucesso.");
+      } catch (error) {
+        console.error(error);
+        setStatus("Erro ao corrigir nota", "err");
+        showToast(`Erro ao corrigir nota: ${error.message}`);
+      }
     }
 
     function renderConfiguracoes() {
@@ -2864,7 +3139,8 @@ Isso remove os itens e lotes dessa nota, desde que ainda não tenham sido baixad
       $("rankingVendas").addEventListener("click", handleRelatoriosClick);
       $("rankingCompras").addEventListener("click", handleRelatoriosClick);
       $("rankingEstoque").addEventListener("click", handleRelatoriosClick);
-      $("btnFecharNotaDetalhe").addEventListener("click", () => { state.selectedNotaId = ""; renderNotaDetalhe(); });
+      $("btnFecharNotaDetalhe").addEventListener("click", () => { state.selectedNotaId = ""; state.editingNotaId = ""; renderNotaDetalhe(); cancelEditNota(); });
+      $("btnEditarNotaDetalhe").addEventListener("click", startEditNota);
       $("btnExcluirNotaDetalhe").addEventListener("click", deleteSelectedNota);
 
       $("notaItensPreview").addEventListener("change", event => {
