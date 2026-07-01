@@ -379,6 +379,29 @@
 
     .compact-input { min-width: 120px; }
     .nowrap { white-space: nowrap; }
+    .card-soft {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .mini-metric {
+      background: #f9fafb;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .mini-metric .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .mini-metric .value { font-weight: 800; font-size: 20px; }
+    .link-btn {
+      background: transparent;
+      border: 0;
+      color: #111827;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
 
     @media (max-width: 1100px) {
       .app { grid-template-columns: 1fr; }
@@ -414,6 +437,7 @@
         <button data-view="importar">Importar Nota</button>
         <button data-view="estoque">Atualizar Estoque</button>
         <button data-view="distribuicao">Distribuição</button>
+        <button data-view="relatorios">Comparativo</button>
         <button data-view="historico">Histórico</button>
         <button data-view="configuracoes">Configurações</button>
       </div>
@@ -499,12 +523,65 @@
           </form>
         </div>
 
-        <div class="card">
+        <div class="card" style="margin-bottom: 16px;">
           <div class="section-title">
             <h3>Produtos cadastrados</h3>
             <small id="produtosCount">0 produtos</small>
           </div>
           <div id="produtosTabela" class="table-wrap"></div>
+        </div>
+
+        <div id="produtoPerfilCard" class="card" style="display:none;">
+          <div class="section-title">
+            <h3 id="produtoPerfilTitulo">Perfil do produto</h3>
+            <div class="actions">
+              <button id="btnFecharProdutoPerfil" class="ghost" type="button">Fechar</button>
+            </div>
+          </div>
+          <div id="produtoPerfilResumo" class="grid cards" style="margin-bottom:16px;"></div>
+          <div class="card-soft" style="margin-bottom:16px;">
+            <div class="section-title">
+              <h3>Alterar preço de venda</h3>
+              <small>Vale para novas contagens a partir da data informada</small>
+            </div>
+            <div class="form-grid four">
+              <div>
+                <label>Data de início</label>
+                <input id="precoDataInicio" type="date" />
+              </div>
+              <div>
+                <label>Novo preço</label>
+                <input id="precoNovoValor" inputmode="decimal" placeholder="0,00" />
+              </div>
+              <div class="wide">
+                <label>Observação</label>
+                <input id="precoObs" placeholder="Ex.: aumento para R$ 1,00 a partir de hoje" />
+              </div>
+              <div class="actions">
+                <button id="btnSalvarPrecoProduto" class="primary" type="button">Salvar novo preço</button>
+              </div>
+            </div>
+          </div>
+          <div class="grid two" style="margin-bottom:16px;">
+            <div class="card-soft">
+              <div class="section-title"><h3>Compras do produto</h3><small>Itens importados em notas</small></div>
+              <div id="produtoPerfilCompras" class="table-wrap"></div>
+            </div>
+            <div class="card-soft">
+              <div class="section-title"><h3>Vendas / baixas</h3><small>Geradas por contagem de estoque</small></div>
+              <div id="produtoPerfilVendas" class="table-wrap"></div>
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="card-soft">
+              <div class="section-title"><h3>Lotes em estoque</h3><small>Base do custo FIFO</small></div>
+              <div id="produtoPerfilLotes" class="table-wrap"></div>
+            </div>
+            <div class="card-soft">
+              <div class="section-title"><h3>Histórico de preço</h3><small>Preço usado conforme data da contagem</small></div>
+              <div id="produtoPerfilPrecos" class="table-wrap"></div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -663,8 +740,37 @@
         </div>
       </section>
 
-      <section id="historico" class="view">
+      <section id="relatorios" class="view">
+        <div class="grid cards" style="margin-bottom:16px;">
+          <div class="card metric"><div class="label">Produto mais lucrativo</div><div class="value" id="relTopLucro">-</div><div class="hint" id="relTopLucroHint">Lucro acumulado por baixas.</div></div>
+          <div class="card metric"><div class="label">Produto que mais vendeu</div><div class="value" id="relTopVendas">-</div><div class="hint" id="relTopVendasHint">Quantidade vendida.</div></div>
+          <div class="card metric"><div class="label">Maior margem realizada</div><div class="value" id="relTopMargem">-</div><div class="hint" id="relTopMargemHint">Lucro / faturamento.</div></div>
+          <div class="card metric"><div class="label">Faturamento registrado</div><div class="value" id="relFaturamentoTotal">R$ 0,00</div><div class="hint">Somente vendas por contagem.</div></div>
+        </div>
+        <div class="grid two" style="margin-bottom:16px;">
+          <div class="card">
+            <div class="section-title"><h3>Ranking por lucro</h3><small>Quem mais deixou dinheiro</small></div>
+            <div id="rankingLucro" class="table-wrap"></div>
+          </div>
+          <div class="card">
+            <div class="section-title"><h3>Ranking por quantidade vendida</h3><small>Quem mais girou</small></div>
+            <div id="rankingVendas" class="table-wrap"></div>
+          </div>
+        </div>
         <div class="grid two">
+          <div class="card">
+            <div class="section-title"><h3>Compras por produto</h3><small>Quantidade e custo comprados</small></div>
+            <div id="rankingCompras" class="table-wrap"></div>
+          </div>
+          <div class="card">
+            <div class="section-title"><h3>Estoque e potencial</h3><small>Saldo, custo médio e lucro potencial</small></div>
+            <div id="rankingEstoque" class="table-wrap"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="historico" class="view">
+        <div class="grid two" style="margin-bottom: 16px;">
           <div class="card">
             <div class="section-title">
               <h3>Notas importadas</h3>
@@ -679,6 +785,14 @@
             </div>
             <div id="historicoContagens" class="table-wrap"></div>
           </div>
+        </div>
+        <div id="notaDetalheCard" class="card" style="display:none;">
+          <div class="section-title">
+            <h3 id="notaDetalheTitulo">Detalhe da nota</h3>
+            <div class="actions"><button id="btnFecharNotaDetalhe" class="ghost" type="button">Fechar</button></div>
+          </div>
+          <div id="notaDetalheResumo" class="grid cards" style="margin-bottom:16px;"></div>
+          <div id="notaDetalheItens" class="table-wrap"></div>
         </div>
       </section>
 
@@ -765,8 +879,12 @@
       movimentos: [],
       notas: [],
       contagens: [],
+      itensNota: [],
+      precos: [],
       aliases: new Map(),
-      previewNota: null
+      previewNota: null,
+      selectedProdutoId: "",
+      selectedNotaId: ""
     };
 
     const $ = (id) => document.getElementById(id);
@@ -777,6 +895,7 @@
       importar: ["Importar Nota", "Pré-carregue XML ou JSON, confira os itens e confirme a entrada."],
       estoque: ["Atualizar Estoque", "Informe o estoque contado. A baixa gera lucro automaticamente."],
       distribuicao: ["Distribuição", "Saldos individuais, saques e extrato do lucro."],
+      relatorios: ["Comparativo", "Ranking de lucro, vendas, compras e estoque por produto."],
       historico: ["Histórico", "Notas importadas e atualizações de estoque."],
       configuracoes: ["Configurações", "Contas e percentuais usados na distribuição do lucro."]
     };
@@ -895,6 +1014,85 @@
       return Array.from(balances.values()).sort((a, b) => (a.conta.ordem || 999) - (b.conta.ordem || 999));
     }
 
+    function getSalePriceForProduct(produtoId, data = today()) {
+      const produto = productById(produtoId);
+      const base = Number(produto?.precoVendaPadrao || 0);
+      const dateKey = String(data || today()).slice(0, 10);
+      const historico = state.precos
+        .filter(h => h.produtoId === produtoId && String(h.dataInicio || "").slice(0, 10) <= dateKey)
+        .sort((a, b) => String(b.dataInicio || "").localeCompare(String(a.dataInicio || "")) || String(b.id).localeCompare(String(a.id)));
+      return Number(historico[0]?.precoVenda ?? base ?? 0);
+    }
+
+    function getPriceHistoryForProduct(produtoId) {
+      return state.precos
+        .filter(h => h.produtoId === produtoId)
+        .sort((a, b) => String(b.dataInicio || "").localeCompare(String(a.dataInicio || "")) || String(b.id).localeCompare(String(a.id)));
+    }
+
+    function getNotaById(id) {
+      return state.notas.find(n => n.id === id);
+    }
+
+    function getProductStats() {
+      const stats = new Map();
+      state.produtos.forEach(p => stats.set(p.id, {
+        produto: p,
+        comprasQtd: 0,
+        comprasCusto: 0,
+        comprasVezes: 0,
+        vendasQtd: 0,
+        faturamento: 0,
+        custoVendido: 0,
+        lucro: 0,
+        baixasVezes: 0,
+        estoque: getStockByProductId(p.id),
+        valorEstoque: getStockValueByProductId(p.id),
+        custoMedio: getAverageCostByProductId(p.id),
+        precoVenda: getSalePriceForProduct(p.id, today())
+      }));
+
+      state.itensNota.forEach(item => {
+        if (!stats.has(item.produtoId)) return;
+        const s = stats.get(item.produtoId);
+        s.comprasQtd += Number(item.quantidade || 0);
+        s.comprasCusto += Number(item.custoTotal || 0);
+        s.comprasVezes += 1;
+      });
+
+      state.contagens.forEach(contagem => {
+        (contagem.itens || []).forEach(item => {
+          if (!stats.has(item.produtoId)) return;
+          const s = stats.get(item.produtoId);
+          if (item.tipo === "venda_presumida") {
+            s.vendasQtd += Number(item.quantidadeVendida || 0);
+            s.faturamento += Number(item.faturamento || 0);
+            s.custoVendido += Number(item.custo || 0);
+            s.lucro += Number(item.lucro || 0);
+            s.baixasVezes += 1;
+          }
+        });
+      });
+
+      return Array.from(stats.values()).map(s => ({
+        ...s,
+        margem: s.faturamento > 0 ? s.lucro / s.faturamento : 0,
+        lucroPotencial: Math.max(0, (s.precoVenda - s.custoMedio) * s.estoque)
+      }));
+    }
+
+    function getProductSales(produtoId) {
+      const vendas = [];
+      state.contagens.forEach(contagem => {
+        (contagem.itens || []).forEach(item => {
+          if (item.produtoId === produtoId && item.tipo === "venda_presumida") {
+            vendas.push({ contagemId: contagem.id, data: contagem.data, observacao: contagem.observacao || "", ...item });
+          }
+        });
+      });
+      return vendas.sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+    }
+
     function htmlEscape(text) {
       return String(text ?? "")
         .replace(/&/g, "&amp;")
@@ -942,13 +1140,15 @@
       try {
         setStatus("Sincronizando...", "");
         await ensureDefaultAccounts();
-        const [produtos, lotes, contas, movimentos, notas, contagens, aliasesDocs] = await Promise.all([
+        const [produtos, lotes, contas, movimentos, notas, contagens, itensNota, precos, aliasesDocs] = await Promise.all([
           loadCollection("produtos"),
           loadCollection("lotesEstoque"),
           loadCollection("contasDistribuicao"),
           loadCollection("movimentosDistribuicao", "data"),
           loadCollection("notasCompra", "data"),
           loadCollection("contagensEstoque", "data"),
+          loadCollection("itensNota"),
+          loadCollection("historicoPrecos", "dataInicio"),
           loadCollection("aliasesProdutos")
         ]);
 
@@ -958,6 +1158,8 @@
         state.movimentos = movimentos;
         state.notas = notas;
         state.contagens = contagens;
+        state.itensNota = itensNota;
+        state.precos = precos;
         state.aliases = new Map();
         aliasesDocs.forEach(a => state.aliases.set(a.descricaoNormalizada, a));
 
@@ -975,7 +1177,10 @@
       renderProdutos();
       renderEstoque();
       renderDistribuicao();
+      renderRelatorios();
       renderHistorico();
+      renderProdutoPerfil();
+      renderNotaDetalhe();
       renderConfiguracoes();
       updateSaqueSelect();
       if (state.previewNota) renderNotaPreview();
@@ -1029,20 +1234,21 @@
         const custoMedio = getAverageCostByProductId(p.id);
         const lucroMedio = Number(p.precoVendaPadrao || 0) - custoMedio;
         return [
-          htmlEscape(p.nome),
+          `<button class="link-btn abrir-produto" data-produto-id="${p.id}" type="button">${htmlEscape(p.nome)}</button>`,
           htmlEscape(p.categoria || "-"),
-          brl(p.precoVendaPadrao || 0),
+          brl(getSalePriceForProduct(p.id, today())),
           Number(estoque).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
           brl(custoMedio),
           brl(lucroMedio),
           brl(valorEstoque),
-          Number(p.estoqueMinimo || 0).toLocaleString("pt-BR")
+          Number(p.estoqueMinimo || 0).toLocaleString("pt-BR"),
+          `<button class="secondary abrir-produto" data-produto-id="${p.id}" type="button">Abrir</button>`
         ];
       });
       $("produtosTabela").innerHTML = rows.length ? renderTable(
-        ["Produto", "Categoria", "Venda", "Estoque", "Custo médio", "Lucro médio", "Valor estoque", "Mínimo"],
+        ["Produto", "Categoria", "Venda atual", "Estoque", "Custo médio", "Lucro médio", "Valor estoque", "Mínimo", "Ações"],
         rows,
-        [false, false, true, true, true, true, true, true]
+        [false, false, true, true, true, true, true, true, false]
       ) : `<div class="empty">Nenhum produto cadastrado ainda.</div>`;
     }
 
@@ -1054,11 +1260,12 @@
       const rows = state.produtos.map(p => {
         const estoque = getStockByProductId(p.id);
         const custoMedio = getAverageCostByProductId(p.id);
+        const precoDataContagem = getSalePriceForProduct(p.id, $("contagemData")?.value || today());
         return `
           <tr>
             <td><strong>${htmlEscape(p.nome)}</strong><br><span class="muted">${htmlEscape(p.categoria || "Sem categoria")}</span></td>
             <td class="num">${Number(estoque).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</td>
-            <td class="num">${brl(p.precoVendaPadrao || 0)}</td>
+            <td class="num">${brl(precoDataContagem)}</td>
             <td class="num">${brl(custoMedio)}</td>
             <td><input class="compact-input estoque-input" data-produto-id="${p.id}" inputmode="decimal" placeholder="Novo estoque" /></td>
           </tr>`;
@@ -1066,7 +1273,7 @@
 
       $("estoqueTabela").innerHTML = `
         <table>
-          <thead><tr><th>Produto</th><th class="num">Estoque sistema</th><th class="num">Venda</th><th class="num">Custo médio</th><th>Novo estoque contado</th></tr></thead>
+          <thead><tr><th>Produto</th><th class="num">Estoque sistema</th><th class="num">Venda na data</th><th class="num">Custo médio</th><th>Novo estoque contado</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
     }
@@ -1103,15 +1310,16 @@
 
     function renderHistorico() {
       $("historicoNotas").innerHTML = state.notas.length ? renderTable(
-        ["Data", "Fornecedor", "Nota", "Valor", "Itens"],
+        ["Data", "Fornecedor", "Nota", "Valor", "Itens", "Ações"],
         state.notas.slice(0, 80).map(n => [
           formatDate(n.data),
           htmlEscape(n.fornecedor || "-"),
           htmlEscape(n.numeroNota || "-"),
           brl(n.valorTotal || 0),
-          Number(n.totalItens || 0).toLocaleString("pt-BR")
+          Number(n.totalItens || 0).toLocaleString("pt-BR"),
+          `<button class="secondary abrir-nota" data-nota-id="${n.id}" type="button">Abrir</button>`
         ]),
-        [false, false, false, true, true]
+        [false, false, false, true, true, false]
       ) : `<div class="empty">Nenhuma nota importada ainda.</div>`;
 
       $("historicoContagens").innerHTML = state.contagens.length ? renderTable(
@@ -1125,6 +1333,208 @@
         ]),
         [false, true, true, true, false]
       ) : `<div class="empty">Nenhuma atualização de estoque ainda.</div>`;
+    }
+
+
+    function renderRelatorios() {
+      const stats = getProductStats();
+      const sold = stats.filter(s => s.vendasQtd > 0 || s.lucro > 0);
+      const topLucro = [...sold].sort((a, b) => b.lucro - a.lucro)[0];
+      const topVendas = [...sold].sort((a, b) => b.vendasQtd - a.vendasQtd)[0];
+      const topMargem = [...sold].filter(s => s.faturamento > 0).sort((a, b) => b.margem - a.margem)[0];
+      const faturamentoTotal = sold.reduce((sum, s) => sum + s.faturamento, 0);
+
+      $("relTopLucro").textContent = topLucro ? topLucro.produto.nome : "-";
+      $("relTopLucroHint").textContent = topLucro ? `${brl(topLucro.lucro)} de lucro` : "Sem vendas registradas.";
+      $("relTopVendas").textContent = topVendas ? topVendas.produto.nome : "-";
+      $("relTopVendasHint").textContent = topVendas ? `${Number(topVendas.vendasQtd).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} unidades vendidas` : "Sem vendas registradas.";
+      $("relTopMargem").textContent = topMargem ? topMargem.produto.nome : "-";
+      $("relTopMargemHint").textContent = topMargem ? `${pct(topMargem.margem * 100)} de margem realizada` : "Sem vendas registradas.";
+      $("relFaturamentoTotal").textContent = brl(faturamentoTotal);
+
+      const lucroRows = [...stats].sort((a, b) => b.lucro - a.lucro).slice(0, 30).map(s => [
+        `<button class="link-btn abrir-produto" data-produto-id="${s.produto.id}" type="button">${htmlEscape(s.produto.nome)}</button>`,
+        Number(s.vendasQtd).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+        brl(s.faturamento),
+        brl(s.custoVendido),
+        `<strong>${brl(s.lucro)}</strong>`,
+        pct(s.margem * 100)
+      ]);
+      $("rankingLucro").innerHTML = lucroRows.length ? renderTable(
+        ["Produto", "Qtd vendida", "Faturamento", "Custo", "Lucro", "Margem"],
+        lucroRows,
+        [false, true, true, true, true, true]
+      ) : `<div class="empty">Sem vendas para comparar ainda.</div>`;
+
+      const vendaRows = [...stats].sort((a, b) => b.vendasQtd - a.vendasQtd).slice(0, 30).map(s => [
+        `<button class="link-btn abrir-produto" data-produto-id="${s.produto.id}" type="button">${htmlEscape(s.produto.nome)}</button>`,
+        Number(s.vendasQtd).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+        brl(s.faturamento),
+        brl(s.lucro),
+        s.baixasVezes.toLocaleString("pt-BR")
+      ]);
+      $("rankingVendas").innerHTML = vendaRows.length ? renderTable(
+        ["Produto", "Qtd vendida", "Faturamento", "Lucro", "Baixas"],
+        vendaRows,
+        [false, true, true, true, true]
+      ) : `<div class="empty">Sem vendas para comparar ainda.</div>`;
+
+      const compraRows = [...stats].sort((a, b) => b.comprasCusto - a.comprasCusto).slice(0, 30).map(s => [
+        `<button class="link-btn abrir-produto" data-produto-id="${s.produto.id}" type="button">${htmlEscape(s.produto.nome)}</button>`,
+        s.comprasVezes.toLocaleString("pt-BR"),
+        Number(s.comprasQtd).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+        brl(s.comprasCusto),
+        brl(s.comprasQtd > 0 ? s.comprasCusto / s.comprasQtd : 0)
+      ]);
+      $("rankingCompras").innerHTML = compraRows.length ? renderTable(
+        ["Produto", "Compras", "Qtd comprada", "Custo total", "Custo médio comprado"],
+        compraRows,
+        [false, true, true, true, true]
+      ) : `<div class="empty">Sem compras importadas ainda.</div>`;
+
+      const estoqueRows = [...stats].sort((a, b) => b.valorEstoque - a.valorEstoque).slice(0, 30).map(s => [
+        `<button class="link-btn abrir-produto" data-produto-id="${s.produto.id}" type="button">${htmlEscape(s.produto.nome)}</button>`,
+        Number(s.estoque).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+        brl(s.valorEstoque),
+        brl(s.custoMedio),
+        brl(s.precoVenda),
+        brl(s.lucroPotencial)
+      ]);
+      $("rankingEstoque").innerHTML = estoqueRows.length ? renderTable(
+        ["Produto", "Estoque", "Valor custo", "Custo médio", "Preço atual", "Lucro potencial"],
+        estoqueRows,
+        [false, true, true, true, true, true]
+      ) : `<div class="empty">Sem estoque carregado ainda.</div>`;
+    }
+
+    function renderProdutoPerfil() {
+      const card = $("produtoPerfilCard");
+      if (!state.selectedProdutoId) {
+        card.style.display = "none";
+        return;
+      }
+      const produto = productById(state.selectedProdutoId);
+      if (!produto) {
+        card.style.display = "none";
+        return;
+      }
+      card.style.display = "block";
+      $("produtoPerfilTitulo").textContent = `Perfil: ${produto.nome}`;
+      $("precoDataInicio").value = $("precoDataInicio").value || today();
+      $("precoNovoValor").placeholder = brl(getSalePriceForProduct(produto.id, today()));
+
+      const stats = getProductStats().find(s => s.produto.id === produto.id) || {};
+      $("produtoPerfilResumo").innerHTML = `
+        <div class="mini-metric"><div class="label">Estoque atual</div><div class="value">${Number(stats.estoque || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</div></div>
+        <div class="mini-metric"><div class="label">Preço de venda atual</div><div class="value">${brl(getSalePriceForProduct(produto.id, today()))}</div></div>
+        <div class="mini-metric"><div class="label">Custo médio atual</div><div class="value">${brl(stats.custoMedio || 0)}</div></div>
+        <div class="mini-metric"><div class="label">Lucro realizado</div><div class="value">${brl(stats.lucro || 0)}</div></div>
+      `;
+
+      const compras = state.itensNota
+        .filter(i => i.produtoId === produto.id)
+        .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+      $("produtoPerfilCompras").innerHTML = compras.length ? renderTable(
+        ["Data", "Nota", "Fornecedor", "Descrição", "Qtd", "Custo", "Unit."],
+        compras.map(i => {
+          const nota = getNotaById(i.notaId);
+          return [
+            formatDate(i.data || nota?.data),
+            htmlEscape(nota?.numeroNota || i.notaId || "-"),
+            htmlEscape(i.fornecedor || nota?.fornecedor || "-"),
+            htmlEscape(i.descricaoOriginal || "-"),
+            Number(i.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+            brl(i.custoTotal || 0),
+            brl(i.custoUnitario || 0)
+          ];
+        }),
+        [false, false, false, false, true, true, true]
+      ) : `<div class="empty">Nenhuma compra importada para este produto.</div>`;
+
+      const vendas = getProductSales(produto.id);
+      $("produtoPerfilVendas").innerHTML = vendas.length ? renderTable(
+        ["Data", "Qtd vendida", "Preço usado", "Faturamento", "Custo", "Lucro", "Obs."],
+        vendas.map(v => [
+          formatDate(v.data),
+          Number(v.quantidadeVendida || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+          brl(v.precoVenda || 0),
+          brl(v.faturamento || 0),
+          brl(v.custo || 0),
+          `<strong>${brl(v.lucro || 0)}</strong>`,
+          htmlEscape(v.observacao || "-")
+        ]),
+        [false, true, true, true, true, true, false]
+      ) : `<div class="empty">Nenhuma venda/baixa registrada para este produto.</div>`;
+
+      const lotes = state.lotes
+        .filter(l => l.produtoId === produto.id)
+        .sort((a, b) => String(b.dataCompra || "").localeCompare(String(a.dataCompra || "")));
+      $("produtoPerfilLotes").innerHTML = lotes.length ? renderTable(
+        ["Data", "Nota", "Qtd inicial", "Qtd atual", "Custo unit.", "Preço lote", "Origem"],
+        lotes.map(l => [
+          formatDate(l.dataCompra),
+          htmlEscape(getNotaById(l.notaId)?.numeroNota || l.notaId || "-"),
+          Number(l.quantidadeInicial || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+          Number(l.quantidadeAtual || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+          brl(l.custoUnitario || 0),
+          brl(l.precoVenda || 0),
+          htmlEscape(l.origem || "-")
+        ]),
+        [false, false, true, true, true, true, false]
+      ) : `<div class="empty">Nenhum lote encontrado para este produto.</div>`;
+
+      const historico = getPriceHistoryForProduct(produto.id);
+      const precoRows = historico.map(h => [
+        formatDate(h.dataInicio),
+        brl(h.precoVenda || 0),
+        htmlEscape(h.origem || "manual"),
+        htmlEscape(h.observacao || "-")
+      ]);
+      if (!precoRows.length) {
+        precoRows.push(["Atual", brl(produto.precoVendaPadrao || 0), "cadastro/produto", "Sem histórico manual ainda"]);
+      }
+      $("produtoPerfilPrecos").innerHTML = renderTable(
+        ["Data início", "Preço", "Origem", "Observação"],
+        precoRows,
+        [false, true, false, false]
+      );
+    }
+
+    function renderNotaDetalhe() {
+      const card = $("notaDetalheCard");
+      if (!state.selectedNotaId) {
+        card.style.display = "none";
+        return;
+      }
+      const nota = getNotaById(state.selectedNotaId);
+      if (!nota) {
+        card.style.display = "none";
+        return;
+      }
+      card.style.display = "block";
+      const itens = state.itensNota.filter(i => i.notaId === nota.id);
+      const qtdTotal = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
+      const custoTotal = itens.reduce((s, i) => s + Number(i.custoTotal || 0), 0);
+      $("notaDetalheTitulo").textContent = `Nota ${nota.numeroNota || nota.id}`;
+      $("notaDetalheResumo").innerHTML = `
+        <div class="mini-metric"><div class="label">Data</div><div class="value">${formatDate(nota.data)}</div></div>
+        <div class="mini-metric"><div class="label">Fornecedor</div><div class="value" style="font-size:16px;">${htmlEscape(nota.fornecedor || "-")}</div></div>
+        <div class="mini-metric"><div class="label">Valor importado</div><div class="value">${brl(nota.valorTotal || custoTotal)}</div></div>
+        <div class="mini-metric"><div class="label">Itens / unidades</div><div class="value">${itens.length} / ${Number(qtdTotal).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</div></div>
+      `;
+      $("notaDetalheItens").innerHTML = itens.length ? renderTable(
+        ["Produto", "Descrição original", "Código", "Qtd", "Custo total", "Custo unit.", "Venda informada"],
+        itens.map(i => [
+          `<button class="link-btn abrir-produto" data-produto-id="${i.produtoId}" type="button">${htmlEscape(i.produtoNome || productById(i.produtoId)?.nome || "-")}</button>`,
+          htmlEscape(i.descricaoOriginal || "-"),
+          htmlEscape(i.codigo || "-"),
+          Number(i.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 }),
+          brl(i.custoTotal || 0),
+          brl(i.custoUnitario || 0),
+          brl(i.precoVenda || 0)
+        ]),
+        [false, false, false, true, true, true, true]
+      ) : `<div class="empty">Nenhum item encontrado para esta nota.</div>`;
     }
 
     function renderConfiguracoes() {
@@ -1366,6 +1776,7 @@
         setStatus("Salvando nota...", "");
         const batch = writeBatch(db);
         const produtosCriados = new Map();
+        const precosGerados = new Set();
         const notaRef = doc(collection(db, "notasCompra"));
 
         batch.set(notaRef, {
@@ -1405,13 +1816,41 @@
                 criadoEm: serverTimestamp(),
                 atualizadoEm: serverTimestamp()
               });
+              const precoKey = `${produtoId}|${nota.data || today()}|${Number(item.precoVenda || 0)}`;
+              if (!precosGerados.has(precoKey)) {
+                precosGerados.add(precoKey);
+                batch.set(doc(collection(db, "historicoPrecos")), {
+                  produtoId,
+                  produtoNome,
+                  dataInicio: nota.data || today(),
+                  precoVenda: Number(item.precoVenda || 0),
+                  origem: "cadastro_importacao_nota",
+                  observacao: `Preço informado na nota ${nota.numeroNota || ""}`,
+                  criadoEm: serverTimestamp()
+                });
+              }
             }
           } else {
             const produtoRef = doc(db, "produtos", produtoId);
+            const precoAnterior = Number(productById(produtoId)?.precoVendaPadrao || 0);
+            const precoNovo = Number(item.precoVenda || 0);
             batch.update(produtoRef, {
-              precoVendaPadrao: Number(item.precoVenda || 0),
+              precoVendaPadrao: precoNovo,
               atualizadoEm: serverTimestamp()
             });
+            const precoKey = `${produtoId}|${nota.data || today()}|${precoNovo}`;
+            if (Math.abs(precoNovo - precoAnterior) > 0.0001 && !precosGerados.has(precoKey)) {
+              precosGerados.add(precoKey);
+              batch.set(doc(collection(db, "historicoPrecos")), {
+                produtoId,
+                produtoNome,
+                dataInicio: nota.data || today(),
+                precoVenda: precoNovo,
+                origem: "importacao_nota",
+                observacao: `Preço atualizado na nota ${nota.numeroNota || ""}`,
+                criadoEm: serverTimestamp()
+              });
+            }
           }
 
           const itemRef = doc(collection(db, "itensNota"));
@@ -1514,7 +1953,7 @@
 
           if (diferenca > 0) {
             const vendaQtd = diferenca;
-            const precoVenda = Number(produto.precoVendaPadrao || 0);
+            const precoVenda = getSalePriceForProduct(produto.id, data);
             const faturamento = vendaQtd * precoVenda;
             let restante = vendaQtd;
             let custo = 0;
@@ -1733,6 +2172,79 @@
       }
     }
 
+
+    function openProduto(produtoId) {
+      state.selectedProdutoId = produtoId;
+      renderProdutoPerfil();
+      const card = $("produtoPerfilCard");
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function handleProdutosClick(event) {
+      const btn = event.target.closest(".abrir-produto");
+      if (!btn) return;
+      openProduto(btn.dataset.produtoId);
+    }
+
+    function handleHistoricoNotasClick(event) {
+      const produtoBtn = event.target.closest(".abrir-produto");
+      if (produtoBtn) {
+        setView("produtos");
+        openProduto(produtoBtn.dataset.produtoId);
+        return;
+      }
+      const notaBtn = event.target.closest(".abrir-nota");
+      if (!notaBtn) return;
+      state.selectedNotaId = notaBtn.dataset.notaId;
+      renderNotaDetalhe();
+      const card = $("notaDetalheCard");
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function handleRelatoriosClick(event) {
+      const btn = event.target.closest(".abrir-produto");
+      if (!btn) return;
+      setView("produtos");
+      openProduto(btn.dataset.produtoId);
+    }
+
+    async function savePrecoProduto() {
+      const produto = productById(state.selectedProdutoId);
+      if (!produto) return showToast("Abra um produto antes de alterar o preço.");
+      const dataInicio = $("precoDataInicio").value || today();
+      const precoVenda = toNumber($("precoNovoValor").value);
+      const observacao = $("precoObs").value || "";
+      if (precoVenda <= 0) return showToast("Informe um preço de venda válido.");
+
+      try {
+        const batch = writeBatch(db);
+        const precoRef = doc(collection(db, "historicoPrecos"));
+        batch.set(precoRef, {
+          produtoId: produto.id,
+          produtoNome: produto.nome,
+          dataInicio,
+          precoVenda,
+          origem: "manual",
+          observacao,
+          criadoEm: serverTimestamp()
+        });
+        batch.update(doc(db, "produtos", produto.id), {
+          precoVendaPadrao: precoVenda,
+          atualizadoEm: serverTimestamp()
+        });
+        await batch.commit();
+        $("precoNovoValor").value = "";
+        $("precoObs").value = "";
+        await refreshData();
+        state.selectedProdutoId = produto.id;
+        renderProdutoPerfil();
+        showToast(`Preço de ${produto.nome} atualizado para ${brl(precoVenda)} a partir de ${formatDate(dataInicio)}.`);
+      } catch (error) {
+        console.error(error);
+        showToast(`Erro ao atualizar preço: ${error.message}`);
+      }
+    }
+
     async function handleConfigClick(event) {
       const salvarBtn = event.target.closest(".salvar-percentual");
       const alternarBtn = event.target.closest(".alternar-conta");
@@ -1901,8 +2413,8 @@
       document.querySelectorAll(".nav button").forEach(b => b.classList.remove("active"));
       $(viewId).classList.add("active");
       document.querySelector(`.nav button[data-view="${viewId}"]`)?.classList.add("active");
-      $("pageTitle").textContent = titles[viewId][0];
-      $("pageSubtitle").textContent = titles[viewId][1];
+      $("pageTitle").textContent = titles[viewId]?.[0] || "Cantina";
+      $("pageSubtitle").textContent = titles[viewId]?.[1] || "";
     }
 
     function bindEvents() {
@@ -1911,6 +2423,9 @@
       });
 
       $("produtoForm").addEventListener("submit", saveProduto);
+      $("produtosTabela").addEventListener("click", handleProdutosClick);
+      $("btnFecharProdutoPerfil").addEventListener("click", () => { state.selectedProdutoId = ""; renderProdutoPerfil(); });
+      $("btnSalvarPrecoProduto").addEventListener("click", savePrecoProduto);
       $("btnImportarBasePlanilha").addEventListener("click", importInitialSpreadsheetBase);
       $("btnCorrigirBaseInicial").addEventListener("click", resetInitialSpreadsheetBase);
       $("btnLerArquivo").addEventListener("click", handleReadFile);
@@ -1919,11 +2434,19 @@
       $("btnCancelarNota").addEventListener("click", clearImport);
       $("btnConfirmarNota").addEventListener("click", confirmNota);
       $("btnSalvarContagem").addEventListener("click", saveStockCount);
+      $("contagemData").addEventListener("change", renderEstoque);
       $("btnZerarInputsEstoque").addEventListener("click", () => document.querySelectorAll(".estoque-input").forEach(i => i.value = ""));
       $("saqueForm").addEventListener("submit", saveSaque);
       $("saqueConta").addEventListener("change", updateSaqueSaldo);
       $("contaForm").addEventListener("submit", saveConta);
       $("contasTabela").addEventListener("click", handleConfigClick);
+      $("historicoNotas").addEventListener("click", handleHistoricoNotasClick);
+      $("notaDetalheItens").addEventListener("click", handleHistoricoNotasClick);
+      $("rankingLucro").addEventListener("click", handleRelatoriosClick);
+      $("rankingVendas").addEventListener("click", handleRelatoriosClick);
+      $("rankingCompras").addEventListener("click", handleRelatoriosClick);
+      $("rankingEstoque").addEventListener("click", handleRelatoriosClick);
+      $("btnFecharNotaDetalhe").addEventListener("click", () => { state.selectedNotaId = ""; renderNotaDetalhe(); });
 
       $("notaItensPreview").addEventListener("change", event => {
         if (event.target.classList.contains("preview-produto-select")) {
@@ -1935,6 +2458,7 @@
 
     $("contagemData").value = today();
     $("saqueData").value = today();
+    $("precoDataInicio").value = today();
 
     bindEvents();
     refreshData();
