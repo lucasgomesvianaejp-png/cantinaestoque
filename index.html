@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cantina Estoque V8</title>
+  <title>Cantina Estoque V10 — Migração</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -437,6 +437,8 @@
         <button data-view="importar">Importar Nota</button>
         <button data-view="estoque">Atualizar Estoque</button>
         <button data-view="distribuicao">Distribuição</button>
+        <button data-view="auditoria">Auditoria</button>
+        <button data-view="migracao">Iniciar migração</button>
         <button data-view="relatorios">Comparativo</button>
         <button data-view="historico">Histórico</button>
         <button data-view="configuracoes">Configurações</button>
@@ -771,6 +773,79 @@
         </div>
       </section>
 
+      <section id="auditoria" class="view">
+        <div class="grid cards" style="margin-bottom:16px;">
+          <div class="card metric"><div class="label">Lucro distribuído</div><div class="value" id="auditLucroCredito">R$ 0,00</div><div class="hint">Créditos gerados por contagem.</div></div>
+          <div class="card metric"><div class="label">Ajustes automáticos</div><div class="value" id="auditAjustes">R$ 0,00</div><div class="hint">Estornos por estoque encontrado a mais.</div></div>
+          <div class="card metric"><div class="label">Saques/Pix</div><div class="value" id="auditSaques">R$ 0,00</div><div class="hint">Pagamentos registrados por conta.</div></div>
+          <div class="card metric"><div class="label">Saldo líquido</div><div class="value" id="auditSaldo">R$ 0,00</div><div class="hint">Gerado - ajustes - saques.</div></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-title">
+            <div>
+              <h3>Alertas da auditoria</h3>
+              <small>O que pode explicar distribuição estranha</small>
+            </div>
+            <div class="actions">
+              <button id="btnExportarAuditoria" class="secondary" type="button">Baixar auditoria JSON</button>
+            </div>
+          </div>
+          <div id="auditAlertas" class="table-wrap"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-title"><h3>Distribuição auditada por conta</h3><small>Separando ajuste automático de saque real</small></div>
+          <div id="auditContas" class="table-wrap"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-title"><h3>Auditoria das contagens</h3><small>Lucro bruto, estorno e líquido por fechamento</small></div>
+          <div id="auditContagens" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="migracao" class="view">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-title">
+            <div>
+              <h3>Exportação completa para migração</h3>
+              <small>Um arquivo JSON para migrar os dados ao Google Sheets</small>
+            </div>
+          </div>
+          <div class="notice" style="margin-bottom:18px;">
+            Esta operação é <strong>somente leitura</strong>: não exclui, corrige ou modifica registros no Firebase.
+            O arquivo incluirá todos os documentos atualmente existentes nas nove coleções usadas pelo sistema,
+            sem restringir por ano, data ou saldo de estoque. Não faça novos lançamentos enquanto a exportação estiver em andamento.
+          </div>
+          <div class="grid two" style="margin-bottom:18px;">
+            <div class="card-soft">
+              <strong>Compras e estoque</strong>
+              <p class="muted" style="margin-bottom:0; line-height:1.6;">Produtos, descrições alternativas, notas fiscais, itens de cada nota, lotes e histórico de preços.</p>
+            </div>
+            <div class="card-soft">
+              <strong>Apuração e repasses</strong>
+              <p class="muted" style="margin-bottom:0; line-height:1.6;">Todas as contagens, ajustes de estoque, créditos de lucro, estornos, contas individuais e saques/Pix.</p>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="btnIniciarMigracao" class="primary" type="button">Iniciar migração — baixar backup completo</button>
+            <a id="linkBackupMigracao" href="#" download hidden style="font-weight:700;">Baixar backup novamente</a>
+          </div>
+          <p id="migracaoProgresso" class="muted" role="status" aria-live="polite" style="margin-top:14px;">Pronto para exportar.</p>
+          <div id="migracaoResumo" class="table-wrap" style="margin-top:12px;"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;">Como usar o arquivo</h3>
+          <p style="line-height:1.7;">Depois do download, envie o <strong>JSON completo</strong> nesta conversa.
+            Com ele, podemos conferir o estoque, reconstruir as entradas e contagens por data,
+            auditar a distribuição e criar a nova planilha. Guarde também uma cópia local como backup.</p>
+          <div class="notice">O JSON contém informações financeiras e nomes dos participantes.
+            Não o publique em repositório GitHub nem deixe o link acessível na internet.
+            O exportador salva somente os registros que ainda existem no banco: dados já excluídos não podem ser recuperados por ele.</div>
+        </div>
+      </section>
+
       <section id="relatorios" class="view">
         <div class="grid cards" style="margin-bottom:16px;">
           <div class="card metric"><div class="label">Produto mais lucrativo</div><div class="value" id="relTopLucro">-</div><div class="hint" id="relTopLucroHint">Lucro acumulado por baixas.</div></div>
@@ -891,6 +966,11 @@
       writeBatch,
       query,
       orderBy,
+      getDocsFromServer,
+      Timestamp,
+      GeoPoint,
+      Bytes,
+      DocumentReference,
       serverTimestamp,
       increment,
       limit
@@ -932,6 +1012,8 @@
       importar: ["Importar Nota", "Pré-carregue XML ou JSON, confira os itens e confirme a entrada."],
       estoque: ["Atualizar Estoque", "Informe o estoque contado na data correta. O sistema respeita notas futuras e corrige lucro quando encontrar estoque a mais."],
       distribuicao: ["Distribuição", "Saldos individuais, saques e extrato do lucro."],
+      auditoria: ["Auditoria", "Conferência dos saldos, ajustes automáticos, saques e contagens."],
+      migracao: ["Iniciar migração", "Exportação integral dos registros para a nova planilha."],
       relatorios: ["Comparativo", "Ranking de lucro, vendas, compras e estoque por produto."],
       historico: ["Histórico", "Notas importadas e atualizações de estoque."],
       configuracoes: ["Configurações", "Contas e percentuais usados na distribuição do lucro."]
@@ -1394,6 +1476,7 @@
       renderProdutos();
       renderEstoque();
       renderDistribuicao();
+      renderAuditoria();
       renderRelatorios();
       renderHistorico();
       renderProdutoPerfil();
@@ -1503,18 +1586,412 @@
         </table>`;
     }
 
+    function getDistributionBreakdown() {
+      const map = new Map();
+      state.contas.forEach(c => map.set(c.id, { conta: c, creditos: 0, ajustes: 0, saques: 0, outrosDebitos: 0, saldo: 0 }));
+      state.movimentos.forEach(m => {
+        const contaId = m.contaId || "sem-conta";
+        if (!map.has(contaId)) {
+          map.set(contaId, { conta: { id: contaId, nome: m.nomeConta || "Conta removida", percentual: 0, ordem: 9999 }, creditos: 0, ajustes: 0, saques: 0, outrosDebitos: 0, saldo: 0 });
+        }
+        const row = map.get(contaId);
+        const valor = Number(m.valor || 0);
+        if (m.tipo === "credito") row.creditos += valor;
+        else if (m.tipo === "debito" && m.origem === "saque") row.saques += valor;
+        else if (m.tipo === "debito" && m.origem === "ajuste_lucro_estoque") row.ajustes += valor;
+        else if (m.tipo === "debito") row.outrosDebitos += valor;
+        row.saldo = row.creditos - row.ajustes - row.saques - row.outrosDebitos;
+      });
+      return Array.from(map.values()).sort((a, b) => (a.conta.ordem || 999) - (b.conta.ordem || 999));
+    }
+
+    function buildAuditData() {
+      const breakdown = getDistributionBreakdown();
+      const totalCreditos = breakdown.reduce((s, b) => s + b.creditos, 0);
+      const totalAjustes = breakdown.reduce((s, b) => s + b.ajustes + b.outrosDebitos, 0);
+      const totalSaques = breakdown.reduce((s, b) => s + b.saques, 0);
+      const totalSaldo = breakdown.reduce((s, b) => s + b.saldo, 0);
+      const percentualTotal = state.contas.filter(c => c.ativo !== false).reduce((s, c) => s + Number(c.percentual || 0), 0);
+      const warnings = [];
+
+      if (Math.abs(percentualTotal - 100) > 0.001) {
+        warnings.push({ nivel: "erro", titulo: "Percentuais não somam 100%", detalhe: `As contas ativas somam ${pct(percentualTotal)}. Novas contagens com lucro podem ser bloqueadas ou distribuídas errado.` });
+      }
+
+      const ajusteMovs = state.movimentos.filter(m => m.tipo === "debito" && m.origem === "ajuste_lucro_estoque");
+      if (ajusteMovs.length) {
+        warnings.push({ nivel: "atenção", titulo: "Existem ajustes automáticos misturados aos débitos", detalhe: `${ajusteMovs.length} movimento(s) de ajuste somam ${brl(totalAjustes)}. Isso reduz o saldo das contas, mas não é Pix/saque real.` });
+      }
+
+      const negativos = breakdown.filter(b => b.saldo < -0.005);
+      negativos.forEach(b => warnings.push({ nivel: "erro", titulo: `Saldo negativo em ${b.conta.nome}`, detalhe: `A conta está com saldo ${brl(b.saldo)}. Verifique saques, ajustes ou percentuais anteriores.` }));
+
+      const porNome = new Map();
+      state.contas.forEach(c => {
+        const key = normalizeText(c.nome || "");
+        porNome.set(key, [...(porNome.get(key) || []), c]);
+      });
+      porNome.forEach((lista, key) => {
+        if (key && lista.length > 1) warnings.push({ nivel: "atenção", titulo: "Possível conta duplicada", detalhe: `Há ${lista.length} contas com nome parecido: ${lista.map(c => c.nome).join(", ")}.` });
+      });
+
+      const contasIds = new Set(state.contas.map(c => c.id));
+      const movsOrfaos = state.movimentos.filter(m => m.contaId && !contasIds.has(m.contaId));
+      if (movsOrfaos.length) {
+        warnings.push({ nivel: "atenção", titulo: "Movimentos em conta removida/inativa", detalhe: `${movsOrfaos.length} movimento(s) apontam para conta que não está mais cadastrada.` });
+      }
+
+      const contagensComAjuste = state.contagens.filter(c => Number(c.lucroRevertidoTotal || 0) > 0);
+      contagensComAjuste.forEach(c => warnings.push({ nivel: "atenção", titulo: `Contagem com estorno em ${formatDate(c.data)}`, detalhe: `Lucro bruto ${brl(c.lucroTotal || 0)}, estorno ${brl(c.lucroRevertidoTotal || 0)}, líquido ${brl(Number(c.lucroTotal || 0) - Number(c.lucroRevertidoTotal || 0))}.` }));
+
+      const latestCount = latestCountDate();
+      const maxNotaDate = state.notas.reduce((max, n) => dateKey(n.data) > max ? dateKey(n.data) : max, "0000-00-00");
+      if (latestCount !== "0000-00-00" && maxNotaDate > latestCount) {
+        warnings.push({ nivel: "atenção", titulo: "Há notas posteriores à última contagem", detalhe: `Última contagem: ${formatDate(latestCount)}. Última nota: ${formatDate(maxNotaDate)}. Para fechar mês anterior, confira se a contagem não incluiu estoque comprado depois da data do fechamento.` });
+      }
+
+      const precosZerados = state.itensNota.filter(i => Number(i.precoVenda || 0) <= 0).slice(0, 20);
+      if (precosZerados.length) {
+        warnings.push({ nivel: "atenção", titulo: "Itens com preço de venda zerado", detalhe: `${precosZerados.length} item(ns) importado(s) estão com preço 0. Se baixarem em contagem, podem gerar lucro estranho. Exemplos: ${precosZerados.map(i => i.produtoNome || i.descricaoOriginal).slice(0, 5).join(", ")}.` });
+      }
+
+      const possiveisSubunidades = state.itensNota.filter(i => {
+        const desc = String(i.descricaoOriginal || "").toUpperCase();
+        return getItemFactor(i) === 1 && /1X\d{2,}|\d+X\d+|UND|CX/.test(desc) && /(PIRULITO|BUBBALOO|CHICL|FINI|BALA)/.test(desc);
+      }).slice(0, 20);
+      if (possiveisSubunidades.length) {
+        warnings.push({ nivel: "atenção", titulo: "Possíveis itens sem conversão de subunidade", detalhe: `Confira itens como ${possiveisSubunidades.map(i => i.descricaoOriginal).slice(0, 5).join(", ")}. Ex.: pacote comprado que deve virar várias unidades vendáveis.` });
+      }
+
+      const contagens = [...state.contagens].sort((a, b) => dateKey(b.data).localeCompare(dateKey(a.data)) || String(b.id).localeCompare(String(a.id))).map(c => {
+        const itens = c.itens || [];
+        const vendas = itens.filter(i => i.tipo === "venda_presumida");
+        const ajustes = itens.filter(i => i.tipo === "ajuste_positivo");
+        const movs = state.movimentos.filter(m => m.contagemId === c.id);
+        return {
+          id: c.id,
+          data: c.data,
+          observacao: c.observacao || "",
+          itens: itens.length,
+          vendas: vendas.length,
+          ajustes: ajustes.length,
+          faturamento: Number(c.faturamentoTotal || 0),
+          custo: Number(c.custoTotal || 0),
+          lucroBruto: Number(c.lucroTotal || 0),
+          estorno: Number(c.lucroRevertidoTotal || 0),
+          lucroLiquido: Number(c.lucroTotal || 0) - Number(c.lucroRevertidoTotal || 0),
+          creditosDistribuidos: movs.filter(m => m.tipo === "credito").reduce((s, m) => s + Number(m.valor || 0), 0),
+          ajustesDistribuidos: movs.filter(m => m.tipo === "debito" && m.origem === "ajuste_lucro_estoque").reduce((s, m) => s + Number(m.valor || 0), 0)
+        };
+      });
+
+      return { gerado: totalCreditos, ajustes: totalAjustes, saques: totalSaques, saldo: totalSaldo, percentualTotal, contas: breakdown, contagens, warnings };
+    }
+
+    function renderAuditoria() {
+      const audit = buildAuditData();
+      if (!$('auditLucroCredito')) return;
+      $("auditLucroCredito").textContent = brl(audit.gerado);
+      $("auditAjustes").textContent = brl(audit.ajustes);
+      $("auditSaques").textContent = brl(audit.saques);
+      $("auditSaldo").textContent = brl(audit.saldo);
+
+      $("auditAlertas").innerHTML = audit.warnings.length ? renderTable(
+        ["Nível", "Ponto encontrado", "Detalhe"],
+        audit.warnings.map(w => [
+          w.nivel === "erro" ? `<span class="badge danger">Erro</span>` : `<span class="badge warn">Atenção</span>`,
+          htmlEscape(w.titulo),
+          htmlEscape(w.detalhe)
+        ]),
+        [false, false, false]
+      ) : `<div class="empty">Nenhum alerta relevante encontrado na auditoria automática.</div>`;
+
+      $("auditContas").innerHTML = renderTable(
+        ["Conta", "% atual", "Gerado", "Ajustes", "Saques/Pix", "Disponível"],
+        audit.contas.map(b => [
+          htmlEscape(b.conta.nome),
+          pct(b.conta.percentual),
+          brl(b.creditos),
+          b.ajustes || b.outrosDebitos ? `<span class="warning-text">-${brl(b.ajustes + b.outrosDebitos)}</span>` : brl(0),
+          b.saques ? `<span class="danger-text">-${brl(b.saques)}</span>` : brl(0),
+          `<strong>${brl(b.saldo)}</strong>`
+        ]),
+        [false, true, true, true, true, true]
+      );
+
+      $("auditContagens").innerHTML = audit.contagens.length ? renderTable(
+        ["Data", "Obs.", "Itens", "Vendas", "Ajustes", "Faturamento", "Custo", "Lucro bruto", "Estorno", "Líquido", "Mov. distribuição"],
+        audit.contagens.map(c => [
+          formatDate(c.data),
+          htmlEscape(c.observacao || "-"),
+          Number(c.itens).toLocaleString("pt-BR"),
+          Number(c.vendas).toLocaleString("pt-BR"),
+          Number(c.ajustes).toLocaleString("pt-BR"),
+          brl(c.faturamento),
+          brl(c.custo),
+          brl(c.lucroBruto),
+          c.estorno ? `<span class="warning-text">-${brl(c.estorno)}</span>` : brl(0),
+          `<strong>${brl(c.lucroLiquido)}</strong>`,
+          `Créd.: ${brl(c.creditosDistribuidos)} · Aj.: ${brl(c.ajustesDistribuidos)}`
+        ]),
+        [false, false, true, true, true, true, true, true, true, true, false]
+      ) : `<div class="empty">Nenhuma contagem salva ainda.</div>`;
+    }
+
+    function exportAuditJson() {
+      const audit = buildAuditData();
+      const payload = {
+        geradoEm: new Date().toISOString(),
+        projeto: "Cantina Estoque",
+        auditoria: audit,
+        colecoesResumo: {
+          produtos: state.produtos.length,
+          notas: state.notas.length,
+          lotes: state.lotes.length,
+          contagens: state.contagens.length,
+          movimentosDistribuicao: state.movimentos.length,
+          contas: state.contas.length,
+          itensNota: state.itensNota.length
+        }
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `auditoria-cantina-${today()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    // Exportação integral e somente-leitura do Firestore (versão 10).
+    // Os nomes a seguir são todas as coleções utilizadas pelas versões V1 a V9.
+    const COLECOES_MIGRACAO = [
+      "produtos", "aliasesProdutos", "notasCompra", "itensNota", "lotesEstoque",
+      "historicoPrecos", "contagensEstoque", "contasDistribuicao", "movimentosDistribuicao"
+    ];
+    let migracaoBlobUrl = null;
+
+    // Preserva tipos Firestore para permitir reconstrução posterior, inclusive precisão de nanossegundos.
+    function serializarCampoFirestore(valor) {
+      if (valor === null || valor === undefined) return valor === undefined ? { __tipoFirestore: "undefined" } : null;
+      if (valor instanceof Timestamp) return {
+        __tipoFirestore: "timestamp", segundos: valor.seconds, nanossegundos: valor.nanoseconds,
+        iso: valor.toDate().toISOString()
+      };
+      if (valor instanceof GeoPoint) return {
+        __tipoFirestore: "geopoint", latitude: valor.latitude, longitude: valor.longitude
+      };
+      if (valor instanceof Bytes) return { __tipoFirestore: "bytes", base64: valor.toBase64() };
+      if (valor instanceof DocumentReference) return {
+        __tipoFirestore: "referencia", caminho: valor.path
+      };
+      if (valor instanceof Date) return { __tipoFirestore: "date", iso: valor.toISOString() };
+      if (Array.isArray(valor)) return valor.map(serializarCampoFirestore);
+      if (typeof valor === "number" && !Number.isFinite(valor)) return {
+        __tipoFirestore: "numeroEspecial", valor: String(valor)
+      };
+      if (typeof valor === "object") return Object.fromEntries(
+        Object.entries(valor).map(([chave, entrada]) => [chave, serializarCampoFirestore(entrada)])
+      );
+      return valor;
+    }
+
+    function montarResumoMigracao(colecoes) {
+      const docs = (nome) => (colecoes[nome] || []).map(registro => ({ ...registro.dados, id: registro.id }));
+      const contas = docs("contasDistribuicao");
+      const movimentos = docs("movimentosDistribuicao");
+      const lotes = docs("lotesEstoque");
+      const produtos = docs("produtos");
+      const contagens = docs("contagensEstoque");
+      const notas = docs("notasCompra");
+      const itensNota = docs("itensNota");
+      const numero = (n) => Number.isFinite(Number(n)) ? Number(n) : 0;
+      const somar = (itens, campo) => itens.reduce((s, item) => s + numero(item[campo]), 0);
+      const saldosPorConta = new Map();
+      contas.forEach(conta => saldosPorConta.set(conta.id, {
+        contaId: conta.id, nome: conta.nome || conta.id, percentualAtual: numero(conta.percentual),
+        creditos: 0, ajustes: 0, saques: 0, outrosDebitos: 0, saldo: 0
+      }));
+      movimentos.forEach(mov => {
+        const id = String(mov.contaId || "sem-conta");
+        if (!saldosPorConta.has(id)) saldosPorConta.set(id, {
+          contaId: id, nome: mov.nomeConta || "Conta não cadastrada", percentualAtual: null,
+          creditos: 0, ajustes: 0, saques: 0, outrosDebitos: 0, saldo: 0
+        });
+        const saldo = saldosPorConta.get(id);
+        const valor = numero(mov.valor);
+        if (mov.tipo === "credito") saldo.creditos += valor;
+        else if (mov.tipo === "debito" && mov.origem === "saque") saldo.saques += valor;
+        else if (mov.tipo === "debito" && mov.origem === "ajuste_lucro_estoque") saldo.ajustes += valor;
+        else if (mov.tipo === "debito") saldo.outrosDebitos += valor;
+        saldo.saldo = saldo.creditos - saldo.ajustes - saldo.saques - saldo.outrosDebitos;
+      });
+      const contasResumo = Array.from(saldosPorConta.values()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      const estoquePorProduto = new Map();
+      produtos.forEach(p => estoquePorProduto.set(p.id, {
+        produtoId: p.id, nome: p.nome || p.id, quantidadeAtual: 0, valorEstoqueCusto: 0,
+        quantidadeCompradaRegistrada: 0, totalGastoCompras: 0
+      }));
+      lotes.forEach(lote => {
+        const id = String(lote.produtoId || "sem-produto");
+        if (!estoquePorProduto.has(id)) estoquePorProduto.set(id, {
+          produtoId: id, nome: lote.produtoNome || "Produto não cadastrado", quantidadeAtual: 0,
+          valorEstoqueCusto: 0, quantidadeCompradaRegistrada: 0, totalGastoCompras: 0
+        });
+        const item = estoquePorProduto.get(id);
+        item.quantidadeAtual += numero(lote.quantidadeAtual);
+        item.valorEstoqueCusto += numero(lote.quantidadeAtual) * numero(lote.custoUnitario);
+      });
+      itensNota.forEach(item => {
+        const ref = estoquePorProduto.get(String(item.produtoId || "sem-produto"));
+        if (ref) {
+          ref.quantidadeCompradaRegistrada += numero(item.quantidade);
+          ref.totalGastoCompras += numero(item.custoTotal);
+        }
+      });
+      const saldo = contasResumo.reduce((s, c) => s + c.saldo, 0);
+      const saques = contasResumo.reduce((s, c) => s + c.saques, 0);
+      const ajustes = contasResumo.reduce((s, c) => s + c.ajustes, 0);
+      const creditos = contasResumo.reduce((s, c) => s + c.creditos, 0);
+      const estoque = Array.from(estoquePorProduto.values()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      const notasPorId = new Set(notas.map(n => n.id));
+      const produtosPorId = new Set(produtos.map(p => p.id));
+      const avisos = [];
+      const itensSemNota = itensNota.filter(item => item.notaId && !notasPorId.has(item.notaId)).length;
+      const itensSemProduto = itensNota.filter(item => item.produtoId && !produtosPorId.has(item.produtoId)).length;
+      const lotesSemProduto = lotes.filter(l => l.produtoId && !produtosPorId.has(l.produtoId)).length;
+      if (itensSemNota) avisos.push(`${itensSemNota} item(ns) referenciam notas ausentes.`);
+      if (itensSemProduto) avisos.push(`${itensSemProduto} item(ns) de nota referenciam produtos ausentes.`);
+      if (lotesSemProduto) avisos.push(`${lotesSemProduto} lote(s) referenciam produtos ausentes.`);
+      if (!movimentos.length) avisos.push("Nenhum movimento financeiro foi encontrado para calcular os saldos.");
+      return {
+        quantidadeDocumentos: Object.fromEntries(COLECOES_MIGRACAO.map(c => [c, (colecoes[c] || []).length])),
+        valoresFinanceiros: {
+          lucroCreditado: creditos,
+          lucroEstornadoPorAjustes: ajustes,
+          saquesPixRegistrados: saques,
+          saldoDasContas: saldo,
+          lucroBrutoNasContagens: somar(contagens, "lucroTotal"),
+          lucroRevertidoNasContagens: somar(contagens, "lucroRevertidoTotal"),
+          faturamentoPresumidoNasContagens: somar(contagens, "faturamentoTotal"),
+          estoqueUnidadesAtual: estoque.reduce((s, e) => s + e.quantidadeAtual, 0),
+          estoqueValorCustoAtual: estoque.reduce((s, e) => s + e.valorEstoqueCusto, 0)
+        },
+        saldosPorConta: contasResumo,
+        estoquePorProduto: estoque,
+        saquesIndividuais: movimentos.filter(m => m.tipo === "debito" && m.origem === "saque")
+          .map(m => ({ id: m.id, data: m.data || null, contaId: m.contaId || null, nomeConta: m.nomeConta || "", valor: numero(m.valor), observacao: m.observacao || "" })),
+        contagensResumo: contagens.map(c => ({
+          id: c.id, data: c.data || null, status: c.status || "",
+          itensContados: Array.isArray(c.itens) ? c.itens.length : 0,
+          faturamentoTotal: numero(c.faturamentoTotal), custoTotal: numero(c.custoTotal),
+          lucroBruto: numero(c.lucroTotal), lucroRevertido: numero(c.lucroRevertidoTotal),
+          lucroLiquido: numero(c.lucroTotal) - numero(c.lucroRevertidoTotal)
+        })),
+        avisosDeConsistencia: avisos
+      };
+    }
+
+    async function hashSha256(texto) {
+      if (!globalThis.crypto?.subtle) return null;
+      const buffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+      return Array.from(new Uint8Array(buffer), b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function iniciarMigracao() {
+      const botao = $("btnIniciarMigracao");
+      const progresso = $("migracaoProgresso");
+      const link = $("linkBackupMigracao");
+      if (botao.disabled) return;
+      botao.disabled = true;
+      botao.textContent = "Preparando backup...";
+      progresso.textContent = "Buscando dados diretamente do Firebase (sem alterações no banco)...";
+      $("migracaoResumo").innerHTML = "";
+      link.hidden = true;
+      try {
+        const colecoes = {};
+        let totalDocumentos = 0;
+        for (let i = 0; i < COLECOES_MIGRACAO.length; i++) {
+          const nome = COLECOES_MIGRACAO[i];
+          progresso.textContent = `Consultando ${i + 1}/${COLECOES_MIGRACAO.length}: ${nome}...`;
+          // Falhas de rede/permissão interrompem o processo: nunca gerar backup parcial.
+          const snapshot = await getDocsFromServer(collection(db, nome));
+          colecoes[nome] = snapshot.docs.map(d => ({
+            id: d.id,
+            caminho: d.ref.path,
+            dados: serializarCampoFirestore(d.data())
+          }));
+          totalDocumentos += snapshot.size;
+        }
+        if (totalDocumentos === 0) throw new Error("Todas as coleções estão vazias. Confira se está no projeto Firebase correto.");
+        progresso.textContent = "Calculando saldos e preparando arquivo de migração...";
+        const resumo = montarResumoMigracao(colecoes);
+        const exportacao = {
+          formato: "cantina-piaget-migracao",
+          versaoFormato: 1,
+          exportadoEm: new Date().toISOString(),
+          banco: { provedor: "Firebase Firestore", projetoId: firebaseConfig.projectId },
+          origem: "Cantina Estoque V10",
+          escopo: "Todos os documentos existentes nas 9 coleções usadas pelas versões V1-V9; sem filtros de data ou saldo.",
+          preservacao: "IDs, caminhos e campos originais dos documentos. Timestamps e outros tipos Firestore possuem marcação __tipoFirestore.",
+          observacao: "Relatórios derivados são auxiliares; os registros de colecoes são a fonte para a migração e auditoria.",
+          resumo,
+          colecoes
+        };
+        exportacao.integridade = {
+          algoritmo: "SHA-256",
+          escopo: "JSON.stringify(exportacao.colecoes)",
+          sha256Colecoes: await hashSha256(JSON.stringify(colecoes)),
+          totalDocumentos
+        };
+        const conteudo = JSON.stringify(exportacao, null, 2);
+        const blob = new Blob([conteudo], { type: "application/json;charset=utf-8" });
+        const arquivo = `cantina-piaget-backup-completo-${new Date().toISOString().slice(0, 10)}.json`;
+        if (migracaoBlobUrl) URL.revokeObjectURL(migracaoBlobUrl);
+        migracaoBlobUrl = URL.createObjectURL(blob);
+        link.href = migracaoBlobUrl;
+        link.download = arquivo;
+        link.hidden = false;
+        link.textContent = `Baixar novamente (${(blob.size / 1024).toFixed(1)} KB)`;
+        link.click();
+        const fin = resumo.valoresFinanceiros;
+        $("migracaoResumo").innerHTML = renderTable(
+          ["Conteúdo da exportação", "Quantidade"],
+          [...COLECOES_MIGRACAO.map(c => [c, String(resumo.quantidadeDocumentos[c])]), ["TOTAL", String(totalDocumentos)]],
+          [false, true]
+        ) + `<p class="muted" style="margin:12px 0 0; line-height:1.65;">`
+          + `Estoque: ${fin.estoqueUnidadesAtual.toLocaleString("pt-BR")} unidades (${brl(fin.estoqueValorCustoAtual)} em custo). `
+          + `Lucro creditado: ${brl(fin.lucroCreditado)}. `
+          + `Saques/Pix: ${brl(fin.saquesPixRegistrados)}. `
+          + `Ajustes: ${brl(fin.lucroEstornadoPorAjustes)}. `
+          + `Saldo por distribuir/sacar: ${brl(fin.saldoDasContas)}.</p>`;
+        progresso.textContent = `Exportação concluída: ${totalDocumentos} documentos em ${COLECOES_MIGRACAO.length} coleções. Arquivo: ${arquivo}`;
+        showToast("Backup completo preparado. Envie o JSON nesta conversa para migrarmos à planilha.");
+      } catch (erro) {
+        console.error("Falha na migração", erro);
+        progresso.textContent = `Erro: ${erro.message}. Não foi criado nenhum arquivo parcial. Tente novamente.`;
+        showToast(`Falha ao exportar: ${erro.message}`);
+      } finally {
+        botao.disabled = false;
+        botao.textContent = "Iniciar migração — baixar backup completo";
+      }
+    }
+
     function renderDistribuicao() {
-      const balances = getBalances();
+      const balances = getDistributionBreakdown();
       $("distribuicaoSaldos").innerHTML = renderTable(
-        ["Conta", "% atual", "Gerado", "Sacado/Pago", "Disponível"],
+        ["Conta", "% atual", "Gerado", "Ajustes", "Sacado/Pago", "Disponível"],
         balances.map(b => [
           htmlEscape(b.conta.nome),
           pct(b.conta.percentual),
           brl(b.creditos),
-          brl(b.debitos),
+          b.ajustes || b.outrosDebitos ? `<span class="warning-text">-${brl(b.ajustes + b.outrosDebitos)}</span>` : brl(0),
+          b.saques ? `<span class="danger-text">-${brl(b.saques)}</span>` : brl(0),
           `<strong>${brl(b.saldo)}</strong>`
         ]),
-        [false, true, true, true, true]
+        [false, true, true, true, true, true]
       );
 
       const recent = [...state.movimentos]
@@ -3253,6 +3730,8 @@ Isso remove os itens e lotes dessa nota, desde que ainda não tenham sido baixad
       $("contagemData").addEventListener("change", renderEstoque);
       $("btnZerarInputsEstoque").addEventListener("click", () => document.querySelectorAll(".estoque-input").forEach(i => i.value = ""));
       $("saqueForm").addEventListener("submit", saveSaque);
+      $("btnExportarAuditoria").addEventListener("click", exportAuditJson);
+      $("btnIniciarMigracao").addEventListener("click", iniciarMigracao);
       $("saqueConta").addEventListener("change", updateSaqueSaldo);
       $("contaForm").addEventListener("submit", saveConta);
       $("contasTabela").addEventListener("click", handleConfigClick);
